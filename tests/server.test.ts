@@ -3,7 +3,6 @@ import type Koa from 'koa'
 import type { Server } from 'http'
 
 vi.mock('@soid/koa', () => ({
-  solidIdentity: vi.fn().mockReturnValue(vi.fn()),
   getAuthenticatedFetch: vi.fn().mockResolvedValue(vi.fn()),
 }))
 

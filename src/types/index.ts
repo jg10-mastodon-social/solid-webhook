@@ -34,3 +34,9 @@ export interface Config {
   webhookConfigUrl: string
   handlerBaseUrl: string
 }
+
+declare module 'koa' {
+  interface DefaultContext {
+    registrations?: WebhookRegistration[]
+  }
+}

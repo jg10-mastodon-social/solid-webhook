@@ -1,7 +1,7 @@
 import { loadConfig, parseWebhooksFromRDF } from './config.js'
 import { createSolidFetch } from './services/solidFetch.js'
 import { handleInboxModified } from './handlers/inboxModified.js'
-import { run } from './index.js'
+import { createApp, startServer, subscribeAll, unsubscribeAll } from './index.js'
 import type { SolidFetch, WebhookRegistration } from './types/index.js'
 
 const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, fetch: SolidFetch) => Promise<void>> = {
@@ -18,6 +18,10 @@ async function main(): Promise<void> {
   console.log(`Issuer: ${config.issuer}`)
   console.log(`Webhook config: ${config.webhookConfigUrl}`)
   console.log(`Handler base: ${config.handlerBaseUrl}`)
+
+  const app = await createApp(config)
+  const server = await startServer(app, config.port)
+  console.log(`Server accepting requests on port ${config.port}`)
 
   const fetchFn = await createSolidFetch(config.webId, config.issuer)
 
@@ -48,9 +52,25 @@ async function main(): Promise<void> {
     actor: w.actor,
   }))
 
-  console.log(`Starting server on port ${config.port}...`)
+  app.context.registrations = registrations
 
-  await run(config, registrations, () => Promise.resolve(fetchFn))
+  console.log('Subscribing to webhook channels...')
+  const subscriptions = await subscribeAll(registrations, fetchFn, config.sendToUrl)
+  console.log(`Subscribed to ${subscriptions.length} webhook channels`)
+
+  console.log(`Solid Webhook server running on port ${config.port}`)
+
+  const shutdown = async () => {
+    console.log('Shutting down...')
+    await unsubscribeAll(subscriptions, fetchFn)
+    server.close()
+    process.exit(0)
+  }
+
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+
+  await new Promise<void>(() => {})
 }
 
 main().catch((error) => {

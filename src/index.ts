@@ -1,16 +1,11 @@
 import Koa from 'koa'
 import Router from '@koa/router'
-import { solidIdentity, getAuthenticatedFetch } from '@soid/koa'
 import { createDpopMiddleware } from './middleware/dpopAuth.js'
 import { subscribeWebhookChannel, unsubscribeWebhookChannel } from './services/webhookChannel.js'
 import type { Config, WebhookRegistration, SubscriptionInfo } from './types/index.js'
 import type { SolidFetch } from './types/index.js'
 
-export async function createApp(
-  config: Config,
-  registrations?: WebhookRegistration[],
-  fetchFactory?: () => Promise<SolidFetch>
-): Promise<Koa> {
+export async function createApp(config: Config): Promise<Koa> {
   const app = new Koa()
   
   app.keys = ['solid-webhook-secret']
@@ -55,6 +50,7 @@ export async function createApp(
 
   router.post(config.webhookEndpoint, dpopMiddleware, async (ctx) => {
     const body = (ctx.request as { body?: Record<string, unknown> }).body || {}
+    const registrations = ctx.app.context.registrations
     
     if (registrations) {
       const matchingReg = registrations.find((reg) => {
@@ -83,9 +79,7 @@ export async function createApp(
 
 export async function startServer(
   app: Koa,
-  port: number,
-  subscriptions?: SubscriptionInfo[],
-  fetchFn?: SolidFetch
+  port: number
 ): Promise<import('http').Server> {
   return new Promise((resolve) => {
     const server = app.listen(port, () => {
@@ -128,33 +122,4 @@ export async function unsubscribeAll(
       console.error(`Failed to unsubscribe from ${sub.id}:`, error)
     }
   }
-}
-
-export async function run(
-  config: Config,
-  registrations: WebhookRegistration[],
-  fetchFactory: () => Promise<SolidFetch>
-): Promise<void> {
-  const fetchFn = await fetchFactory()
-  const app = await createApp(config, registrations, fetchFactory)
-  
-  const subscriptions = await subscribeAll(registrations, fetchFn, config.sendToUrl)
-  
-  const server = await startServer(app, config.port, subscriptions, fetchFn)
-  
-  console.log(`Solid Webhook server running on port ${config.port}`)
-  
-  const shutdown = async () => {
-    console.log('Shutting down...')
-    await unsubscribeAll(subscriptions, fetchFn)
-    server.close()
-    process.exit(0)
-  }
-  
-  process.on('SIGINT', shutdown)
-  process.on('SIGTERM', shutdown)
-  
-  await new Promise<void>(() => {
-    // Keep the process alive - never resolves
-  })
 }

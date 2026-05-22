@@ -29,8 +29,8 @@ Tests live alongside source in `tests/` directory, mirroring `src/` structure. R
 
 ## Key Files
 
-- `src/main.ts` - CLI entry point (blocks forever after server start)
-- `src/index.ts` - `run()` blocks with never-resolving promise
+- `src/main.ts` - CLI entry point, startup sequence: createApp → startServer → createSolidFetch → fetch config → subscribe
+- `src/index.ts` - Server utilities: createApp, startServer, subscribeAll, unsubscribeAll
 - `src/config.ts` - `loadConfig()` reads all env vars, `parseWebhooksFromRDF()` parses Turtle RDF
 - `src/middleware/dpopAuth.ts` - DPoP verification (htu, htm, iss, jti dedup)
 - `src/services/webhookChannel.ts` - WebhookChannel2023 subscribe/unsubscribe

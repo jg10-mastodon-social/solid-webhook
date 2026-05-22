@@ -32,10 +32,6 @@ export function loadConfig(): Config {
 
   const whitelistedIssuers = whitelistedIssuersStr.split(',').map((s) => s.trim())
 
-  if (!whitelistedIssuers.includes(issuer)) {
-    throw new Error(`Issuer ${issuer} not in whitelist`)
-  }
-
   return {
     webId,
     issuer,
