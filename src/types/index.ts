@@ -27,6 +27,7 @@ export type WebhookHandler = (event: WebhookEvent) => void | Promise<void>
 export interface Config {
   webId: string
   issuer: string
+  baseUrl: string
   webhookEndpoint: string
   port: number
   sendToUrl: string

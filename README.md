@@ -8,6 +8,7 @@ Solid pod webhook listener server built with Koa and @soid/koa.
 - DPoP authentication middleware
 - RDF-based webhook configuration
 - Inbox event handlers
+- Solid OIDC identity via @soid/koa solidIdentity
 
 ## Prerequisites
 
@@ -34,6 +35,7 @@ Required variables:
 - `WEBID` - Your Solid WebID
 - `ISSUER` - OIDC issuer (must be in WHITELISTED_ISSUERS)
 - `WHITELISTED_ISSUERS` - Comma-separated list of allowed issuers
+- `BASE_URL` - Base URL for the server (e.g., http://localhost:8081)
 
 Optional variables:
 - `WEBHOOK_ENDPOINT` - Webhook endpoint path (default: /webhook)
@@ -105,9 +107,8 @@ npm run typecheck  # Check TypeScript
 
 ## Identity Endpoints
 
-The server automatically serves:
-- `/.well-known/openid-configuration` - OIDC configuration
-- `/jwks` - JSON Web Key Set for token verification
+The server uses solidIdentity from @soid/koa to provide identity routes. Custom endpoints:
+- `/.well-known/openid-configuration` - OIDC configuration (no jwks_uri)
 - `/webid` - Turtle WebID document with OIDC issuer
 
 ## Security

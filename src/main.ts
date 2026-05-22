@@ -10,12 +10,13 @@ const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, 
   },
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.log('Starting Solid Webhook server...')
 
   const config = loadConfig()
   console.log(`WebID: ${config.webId}`)
   console.log(`Issuer: ${config.issuer}`)
+  console.log(`Base URL: ${config.baseUrl}`)
   console.log(`Webhook config: ${config.webhookConfigUrl}`)
   console.log(`Handler base: ${config.handlerBaseUrl}`)
 
@@ -26,19 +27,26 @@ async function main(): Promise<void> {
   const fetchFn = await createSolidFetch(config.webId, config.issuer)
 
   console.log('Loading webhook configuration...')
-  const rdfResponse = await fetchFn(config.webhookConfigUrl, {
-    headers: { accept: 'text/turtle,application/x-turtle' },
-  })
+  let webhooks: import('./config.js').ParsedWebhook[] = []
 
-  if (!rdfResponse.ok) {
-    throw new Error(`Failed to fetch webhook config: ${rdfResponse.status} ${rdfResponse.statusText}`)
+  try {
+    const rdfResponse = await fetchFn(config.webhookConfigUrl, {
+      headers: { accept: 'text/turtle,application/x-turtle' },
+    })
+
+    if (!rdfResponse.ok) {
+      throw new Error(`Failed to fetch webhook config: ${rdfResponse.status} ${rdfResponse.statusText}`)
+    }
+
+    const rdfContent = await rdfResponse.text()
+    console.log(`Loaded ${rdfContent.length} bytes of RDF configuration`)
+
+    webhooks = await parseWebhooksFromRDF(rdfContent, config.handlerBaseUrl)
+    console.log(`Found ${webhooks.length} webhook registrations`)
+  } catch (error) {
+    console.error(`Webhook configuration unavailable: ${error}`)
+    console.error('Server will continue without webhook subscriptions')
   }
-
-  const rdfContent = await rdfResponse.text()
-  console.log(`Loaded ${rdfContent.length} bytes of RDF configuration`)
-
-  const webhooks = await parseWebhooksFromRDF(rdfContent, config.handlerBaseUrl)
-  console.log(`Found ${webhooks.length} webhook registrations`)
 
   const registrations: WebhookRegistration[] = webhooks.map(w => ({
     topic: w.topic,

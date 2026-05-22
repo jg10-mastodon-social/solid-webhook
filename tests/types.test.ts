@@ -86,6 +86,7 @@ describe('Types', () => {
       const config: Config = {
         webId: 'https://example.com/profile/card#me',
         issuer: 'https://example.com',
+        baseUrl: 'http://localhost:8080',
         webhookEndpoint: '/webhook',
         port: 8080,
         sendToUrl: 'https://example.com/webhook/',

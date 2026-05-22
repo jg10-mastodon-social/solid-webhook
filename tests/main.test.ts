@@ -1,5 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+vi.mock('@soid/koa', () => ({
+  getAuthenticatedFetch: vi.fn().mockResolvedValue(vi.fn()),
+  solidIdentity: vi.fn().mockReturnValue({
+    routes: vi.fn().mockReturnValue([]),
+  }),
+}))
+
+const mockFetch = vi.fn()
+vi.mock('../src/services/solidFetch.js', () => ({
+  createSolidFetch: vi.fn().mockResolvedValue(mockFetch),
+}))
+
+vi.mock('../src/services/webhookChannel.js', () => ({
+  subscribeWebhookChannel: vi.fn().mockResolvedValue({
+    id: 'https://pod.example.com/webhook/123',
+    receiveFrom: 'https://pod.example.com/webhook/receive/123',
+    topic: 'https://pod.example.com/inbox/',
+  }),
+  unsubscribeWebhookChannel: vi.fn().mockResolvedValue(undefined),
+}))
+
 const originalEnv = process.env
 
 describe('Main Entry Point', () => {
@@ -19,6 +40,7 @@ describe('Main Entry Point', () => {
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
+      process.env.BASE_URL = 'http://localhost:8081'
 
       const { loadConfig } = await import('../src/config.js')
       const config = loadConfig()
@@ -26,12 +48,14 @@ describe('Main Entry Point', () => {
       expect(config.webId).toBe('https://pod.example.com/profile/card#me')
       expect(config.webhookConfigUrl).toBe('https://pod.example.com/webhooks.ttl')
       expect(config.handlerBaseUrl).toBe('https://pod.example.com/handlers#')
+      expect(config.baseUrl).toBe('http://localhost:8081')
     })
 
     it('should fail without WEBHOOK_CONFIG_URL', async () => {
       process.env.WEBID = 'https://pod.example.com/profile/card#me'
       process.env.ISSUER = 'https://pod.example.com'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.BASE_URL = 'http://localhost:8081'
       delete process.env.WEBHOOK_CONFIG_URL
 
       const { loadConfig } = await import('../src/config.js')
@@ -42,6 +66,7 @@ describe('Main Entry Point', () => {
       process.env.WEBID = 'https://pod.example.com/profile/card#me'
       process.env.ISSUER = 'https://pod.example.com'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.BASE_URL = 'http://localhost:8081'
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       delete process.env.HANDLER_BASE_URL
 
@@ -64,6 +89,38 @@ describe('Main Entry Point', () => {
       expect(webhooks).toHaveLength(1)
       expect(webhooks[0].topic).toBe('https://pod.example.com/inbox/')
       expect(webhooks[0].handler).toBe('InboxModified')
+    })
+  })
+
+  describe('Webhook config fetch failure', () => {
+    it('should not crash server when webhook config fetch fails', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://solidcommunity.net'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
+      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
+      process.env.BASE_URL = 'http://localhost:8081'
+
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      })
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const { main } = await import('../src/main.js')
+
+      main()
+
+      await new Promise(resolve => setTimeout(resolve, 200))
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Webhook configuration unavailable')
+      )
+
+      consoleErrorSpy.mockRestore()
     })
   })
 })

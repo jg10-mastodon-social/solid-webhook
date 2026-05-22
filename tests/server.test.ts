@@ -4,6 +4,9 @@ import type { Server } from 'http'
 
 vi.mock('@soid/koa', () => ({
   getAuthenticatedFetch: vi.fn().mockResolvedValue(vi.fn()),
+  solidIdentity: vi.fn().mockReturnValue({
+    routes: vi.fn().mockReturnValue([]),
+  }),
 }))
 
 vi.mock('../src/services/webhookChannel.js', () => ({
@@ -37,6 +40,7 @@ describe('Koa Server', () => {
         whitelistedIssuers: ['https://pod.example.com'],
         webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
         handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8081',
       })
       expect(app).toBeDefined()
     })
@@ -54,6 +58,7 @@ describe('Koa Server', () => {
         whitelistedIssuers: ['https://pod.example.com'],
         webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
         handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8082',
       })
 
       server = await startServer(app, 8082)
@@ -78,6 +83,7 @@ describe('Koa Server', () => {
         whitelistedIssuers: ['https://pod.example.com'],
         webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
         handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8084',
       })
 
       server = await startServer(app, 8084)

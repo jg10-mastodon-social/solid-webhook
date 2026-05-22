@@ -1,5 +1,6 @@
 import Koa from 'koa'
 import Router from '@koa/router'
+import { solidIdentity } from '@soid/koa'
 import { createDpopMiddleware } from './middleware/dpopAuth.js'
 import { subscribeWebhookChannel, unsubscribeWebhookChannel } from './services/webhookChannel.js'
 import type { Config, WebhookRegistration, SubscriptionInfo } from './types/index.js'
@@ -12,36 +13,8 @@ export async function createApp(config: Config): Promise<Koa> {
   
   const router = new Router()
   
-  router.get('/.well-known/openid-configuration', (ctx) => {
-    ctx.body = {
-      issuer: config.issuer,
-      authorization_endpoint: `${config.issuer}/authorize`,
-      token_endpoint: `${config.issuer}/token`,
-      jwks_uri: `${config.issuer}/.well-known/jwks`,
-      token_endpoint_auth_methods_supported: ['DPoP'],
-      token_endpoint_auth_signing_alg_values_supported: ['ES256'],
-      dpop_signing_alg_values_supported: ['ES256'],
-      grant_types_supported: ['authorization_code', 'refresh_token'],
-    }
-  })
-
-  router.get('/jwks', (ctx) => {
-    ctx.body = {
-      keys: []
-    }
-  })
-
-  router.get('/webid', (ctx) => {
-    ctx.set('Content-Type', 'text/turtle')
-    ctx.body = `
-@prefix solid: <http://www.w3.org/ns/solid/terms#> .
-@prefix as: <https://www.w3.org/ns/activitystreams#> .
-
-<${config.webId.split('#')[0]}> a solid:PersonalOwnerDocument;
-  solid:oidcIssuer <${config.issuer}> .
-`
-  })
-
+  router.use(solidIdentity(config.webId, config.baseUrl).routes())
+  
   const dpopMiddleware = createDpopMiddleware(
     config.whitelistedIssuers,
     config.sendToUrl,

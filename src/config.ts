@@ -13,6 +13,7 @@ export function loadConfig(): Config {
   const whitelistedIssuersStr = process.env.WHITELISTED_ISSUERS
   const webhookConfigUrl = process.env.WEBHOOK_CONFIG_URL
   const handlerBaseUrl = process.env.HANDLER_BASE_URL
+  const baseUrl = process.env.BASE_URL
 
   if (!webId) {
     throw new Error('WEBID is required')
@@ -29,12 +30,16 @@ export function loadConfig(): Config {
   if (!handlerBaseUrl) {
     throw new Error('HANDLER_BASE_URL is required')
   }
+  if (!baseUrl) {
+    throw new Error('BASE_URL is required')
+  }
 
   const whitelistedIssuers = whitelistedIssuersStr.split(',').map((s) => s.trim())
 
   return {
     webId,
     issuer,
+    baseUrl,
     webhookEndpoint: process.env.WEBHOOK_ENDPOINT || '/webhook',
     port: parseInt(process.env.PORT || '8081', 10),
     sendToUrl: process.env.SEND_TO_URL || '',
