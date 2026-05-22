@@ -17,6 +17,7 @@ Solid pod webhook listener server built with Koa and @soid/koa.
 
 ```bash
 npm install
+npm run build
 ```
 
 ## Configuration
@@ -75,7 +76,14 @@ await startServer(app, config.port)
 ### Command Line
 
 ```bash
-node --env-file=.env dist/index.js
+npm start
+```
+
+Or with environment file:
+
+```bash
+cp .env.example .env
+npm start
 ```
 
 ## Testing

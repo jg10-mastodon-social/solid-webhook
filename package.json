@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "build": "tsc",
+    "start": "node dist/src/index.js",
+    "dev": "npm run build && npm start",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
