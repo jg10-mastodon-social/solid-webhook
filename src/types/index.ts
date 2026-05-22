@@ -31,4 +31,6 @@ export interface Config {
   port: number
   sendToUrl: string
   whitelistedIssuers: string[]
+  webhookConfigUrl: string
+  handlerBaseUrl: string
 }

@@ -21,6 +21,8 @@ describe('Config', () => {
       process.env.PORT = '8080'
       process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net,https://pod.example.com'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
 
       const { loadConfig } = await import('../src/config.js')
       const config = loadConfig()
@@ -31,6 +33,8 @@ describe('Config', () => {
       expect(config.port).toBe(8080)
       expect(config.sendToUrl).toBe('https://pod.example.com/webhook/')
       expect(config.whitelistedIssuers).toEqual(['https://solidcommunity.net', 'https://pod.example.com'])
+      expect(config.webhookConfigUrl).toBe('https://pod.example.com/webhooks.ttl')
+      expect(config.handlerBaseUrl).toBe('https://pod.example.com/handlers#')
     })
 
     it('should throw if required WEBID is missing', async () => {
@@ -60,10 +64,47 @@ describe('Config', () => {
       expect(() => loadConfig()).toThrow('WHITELISTED_ISSUERS is required')
     })
 
+    it('should throw if WEBHOOK_CONFIG_URL is missing', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://pod.example.com'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      delete process.env.WEBHOOK_CONFIG_URL
+
+      const { loadConfig } = await import('../src/config.js')
+      expect(() => loadConfig()).toThrow('WEBHOOK_CONFIG_URL is required')
+    })
+
+    it('should throw if HANDLER_BASE_URL is missing', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://pod.example.com'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      delete process.env.HANDLER_BASE_URL
+
+      const { loadConfig } = await import('../src/config.js')
+      expect(() => loadConfig()).toThrow('HANDLER_BASE_URL is required')
+    })
+
+    it('should load all required config including webhook vars', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://pod.example.com'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net,https://pod.example.com'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/settings/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/settings/webhooks.ttl#'
+
+      const { loadConfig } = await import('../src/config.js')
+      const config = loadConfig()
+
+      expect(config.webhookConfigUrl).toBe('https://pod.example.com/settings/webhooks.ttl')
+      expect(config.handlerBaseUrl).toBe('https://pod.example.com/settings/webhooks.ttl#')
+    })
+
     it('should use defaults for optional values', async () => {
       process.env.WEBID = 'https://pod.example.com/profile/card#me'
       process.env.ISSUER = 'https://solidcommunity.net'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
       process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
       delete process.env.PORT
       delete process.env.WEBHOOK_ENDPOINT
@@ -80,6 +121,8 @@ describe('Config', () => {
       process.env.WEBID = 'https://pod.example.com/profile/card#me'
       process.env.ISSUER = 'https://untrusted.example.com'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net,https://pod.example.com'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
 
       const { loadConfig } = await import('../src/config.js')
       expect(() => loadConfig()).toThrow(/not in whitelist/)
@@ -89,6 +132,8 @@ describe('Config', () => {
       process.env.WEBID = 'https://pod.example.com/profile/card#me'
       process.env.ISSUER = 'https://solidcommunity.net'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
 
       const { loadConfig } = await import('../src/config.js')
       const config = loadConfig()

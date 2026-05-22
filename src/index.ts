@@ -153,4 +153,8 @@ export async function run(
   
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
+  
+  await new Promise<void>(() => {
+    // Keep the process alive - never resolves
+  })
 }

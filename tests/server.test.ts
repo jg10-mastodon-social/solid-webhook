@@ -36,6 +36,8 @@ describe('Koa Server', () => {
         port: 8081,
         sendToUrl: 'https://pod.example.com/webhook/',
         whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
       })
       expect(app).toBeDefined()
     })
@@ -51,6 +53,8 @@ describe('Koa Server', () => {
         port: 8082,
         sendToUrl: 'https://pod.example.com/webhook/',
         whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
       })
 
       server = await startServer(app, 8082)
@@ -73,6 +77,8 @@ describe('Koa Server', () => {
         port: 8084,
         sendToUrl: 'https://pod.example.com/webhook/',
         whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
       })
 
       server = await startServer(app, 8084)

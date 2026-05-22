@@ -11,6 +11,8 @@ export function loadConfig(): Config {
   const webId = process.env.WEBID
   const issuer = process.env.ISSUER
   const whitelistedIssuersStr = process.env.WHITELISTED_ISSUERS
+  const webhookConfigUrl = process.env.WEBHOOK_CONFIG_URL
+  const handlerBaseUrl = process.env.HANDLER_BASE_URL
 
   if (!webId) {
     throw new Error('WEBID is required')
@@ -20,6 +22,12 @@ export function loadConfig(): Config {
   }
   if (!whitelistedIssuersStr) {
     throw new Error('WHITELISTED_ISSUERS is required')
+  }
+  if (!webhookConfigUrl) {
+    throw new Error('WEBHOOK_CONFIG_URL is required')
+  }
+  if (!handlerBaseUrl) {
+    throw new Error('HANDLER_BASE_URL is required')
   }
 
   const whitelistedIssuers = whitelistedIssuersStr.split(',').map((s) => s.trim())
@@ -35,6 +43,8 @@ export function loadConfig(): Config {
     port: parseInt(process.env.PORT || '8081', 10),
     sendToUrl: process.env.SEND_TO_URL || '',
     whitelistedIssuers,
+    webhookConfigUrl,
+    handlerBaseUrl,
   }
 }
 
@@ -74,7 +84,7 @@ export async function parseWebhooksFromRDF(
             if (topicQuads.length > 0 && handlerQuads.length > 0) {
               const topic = topicQuads[0].object.value
               const handlerUri = handlerQuads[0].object.value
-              const handlerName = handlerUri.replace(handlerBaseUrl + '#', '').replace(handlerBaseUrl + '/', '')
+              const handlerName = handlerUri.replace(handlerBaseUrl, '').replace('#', '')
               const actor = actorQuads.length > 0 ? actorQuads[0].object.value : undefined
 
               webhooks.push({ topic, handler: handlerName, actor })

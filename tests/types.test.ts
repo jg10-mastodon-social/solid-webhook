@@ -90,11 +90,15 @@ describe('Types', () => {
         port: 8080,
         sendToUrl: 'https://example.com/webhook/',
         whitelistedIssuers: ['https://solidcommunity.net', 'https://pod.example.com'],
+        webhookConfigUrl: 'https://example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://example.com/handlers#',
       }
       expect(config.webId).toBeDefined()
       expect(config.issuer).toBeDefined()
       expect(config.port).toBeGreaterThan(0)
       expect(Array.isArray(config.whitelistedIssuers)).toBe(true)
+      expect(config.webhookConfigUrl).toBeDefined()
+      expect(config.handlerBaseUrl).toBeDefined()
     })
   })
 })
