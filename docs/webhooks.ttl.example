@@ -1,0 +1,12 @@
+@prefix : <https://pod.example.com/settings/webhooks.ttl#> .
+
+# Subscribe to inbox for modifications
+:webhook1 a :WebHook;
+  :topic <https://jg10.solidcommunity.net/inbox/>;
+  :handler :InboxModified .
+
+# Subscribe to outbox for new activities
+:webhook2 a :WebHook;
+  :topic <https://jg10.solidcommunity.net/outbox/>;
+  :handler :OutboxModified;
+  :actor <https://jg10.solidcommunity.net/actor/#me> .
