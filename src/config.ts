@@ -71,21 +71,27 @@ export async function parseWebhooksFromRDF(
       } else {
         const webhooks: ParsedWebhook[] = []
         const webhookQuads = store.getQuads(null, null, null, null)
+        const typePredicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+        const webHookType = `${handlerBaseUrl}WebHook`
+        const topicPredicate = `${handlerBaseUrl}topic`
+        const handlerPredicate = `${handlerBaseUrl}handler`
+        const actorPredicate = `${handlerBaseUrl}actor`
         
         for (const quad of webhookQuads) {
           if (
-            quad.predicate.value === 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' &&
-            quad.object.value === 'https://example.com/settings/webhooks.ttl#WebHook'
+            quad.predicate.value === typePredicate &&
+            quad.object.value === webHookType
           ) {
             const webhookUri = quad.subject.value
-            const topicQuads = store.getQuads(webhookUri, 'https://example.com/settings/webhooks.ttl#topic', null, null)
-            const handlerQuads = store.getQuads(webhookUri, 'https://example.com/settings/webhooks.ttl#handler', null, null)
-            const actorQuads = store.getQuads(webhookUri, 'https://example.com/settings/webhooks.ttl#actor', null, null)
+            const topicQuads = store.getQuads(webhookUri, topicPredicate, null, null)
+            const handlerQuads = store.getQuads(webhookUri, handlerPredicate, null, null)
+            const actorQuads = store.getQuads(webhookUri, actorPredicate, null, null)
 
             if (topicQuads.length > 0 && handlerQuads.length > 0) {
               const topic = topicQuads[0].object.value
               const handlerUri = handlerQuads[0].object.value
-              const handlerName = handlerUri.replace(handlerBaseUrl, '').replace('#', '')
+              const hashIndex = handlerUri.lastIndexOf('#')
+              const handlerName = hashIndex !== -1 ? handlerUri.slice(hashIndex + 1) : handlerUri
               const actor = actorQuads.length > 0 ? actorQuads[0].object.value : undefined
 
               webhooks.push({ topic, handler: handlerName, actor })

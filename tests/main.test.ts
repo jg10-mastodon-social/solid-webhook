@@ -76,15 +76,16 @@ describe('Main Entry Point', () => {
   })
 
   describe('Webhook parsing', () => {
-    it('should parse handler names from RDF', async () => {
+    it('should parse handler names from RDF using handlerBaseUrl as namespace', async () => {
       const { parseWebhooksFromRDF } = await import('../src/config.js')
 
-      const rdfContent = `@prefix : <https://example.com/settings/webhooks.ttl#> .
+      const handlerBaseUrl = 'https://example.com/settings/webhooks.ttl#'
+      const rdfContent = `@prefix : <${handlerBaseUrl}> .
 :webhook1 a :WebHook;
   :topic <https://pod.example.com/inbox/>;
   :handler <https://example.com/handlers#InboxModified> .`
 
-      const webhooks = await parseWebhooksFromRDF(rdfContent, 'https://example.com/handlers#')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
 
       expect(webhooks).toHaveLength(1)
       expect(webhooks[0].topic).toBe('https://pod.example.com/inbox/')

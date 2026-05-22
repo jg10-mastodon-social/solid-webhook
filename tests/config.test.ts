@@ -150,9 +150,10 @@ describe('Config', () => {
   })
 
   describe('parseWebhooksFromRDF', () => {
-    it('should parse valid RDF webhook configuration', async () => {
+    it('should parse valid RDF webhook configuration using handlerBaseUrl as namespace', async () => {
+      const handlerBaseUrl = 'https://example.com/settings/webhooks.ttl#'
       const rdfContent = `
-        @prefix : <https://example.com/settings/webhooks.ttl#> .
+        @prefix : <${handlerBaseUrl}> .
         @prefix as: <https://www.w3.org/ns/activitystreams#> .
 
         :webhook1 a :WebHook;
@@ -166,7 +167,7 @@ describe('Config', () => {
       `
 
       const { parseWebhooksFromRDF } = await import('../src/config.js')
-      const webhooks = await parseWebhooksFromRDF(rdfContent, 'https://example.com/handlers')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
 
       expect(webhooks).toHaveLength(2)
       expect(webhooks[0]).toMatchObject({
@@ -193,8 +194,9 @@ describe('Config', () => {
     })
 
     it('should handle multiple handlers', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
       const rdfContent = `
-        @prefix : <https://example.com/settings/webhooks.ttl#> .
+        @prefix : <${handlerBaseUrl}> .
 
         :webhook1 a :WebHook;
           :topic <https://example.com/inbox/>;
@@ -206,7 +208,7 @@ describe('Config', () => {
       `
 
       const { parseWebhooksFromRDF } = await import('../src/config.js')
-      const webhooks = await parseWebhooksFromRDF(rdfContent, 'https://example.com/handlers')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
 
       expect(webhooks).toHaveLength(2)
     })
