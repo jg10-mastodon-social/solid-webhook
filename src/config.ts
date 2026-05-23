@@ -8,19 +8,18 @@ export interface ParsedWebhook {
 }
 
 export function loadConfig(): Config {
-  const webId = process.env.WEBID
-  const issuer = process.env.ISSUER
+  const baseUrl = process.env.BASE_URL
+
+  if (!baseUrl) {
+    throw new Error('BASE_URL is required')
+  }
+
+  const webId = process.env.WEBID || `${baseUrl}/webid`
+  const issuer = process.env.ISSUER || baseUrl
   const whitelistedIssuersStr = process.env.WHITELISTED_ISSUERS
   const webhookConfigUrl = process.env.WEBHOOK_CONFIG_URL
   const handlerBaseUrl = process.env.HANDLER_BASE_URL
-  const baseUrl = process.env.BASE_URL
 
-  if (!webId) {
-    throw new Error('WEBID is required')
-  }
-  if (!issuer) {
-    throw new Error('ISSUER is required')
-  }
   if (!whitelistedIssuersStr) {
     throw new Error('WHITELISTED_ISSUERS is required')
   }
@@ -30,12 +29,11 @@ export function loadConfig(): Config {
   if (!handlerBaseUrl) {
     throw new Error('HANDLER_BASE_URL is required')
   }
-  if (!baseUrl) {
-    throw new Error('BASE_URL is required')
-  }
-  if (!process.env.ADMIN_WEBID) {
-    throw new Error('ADMIN_WEBID is required')
-  }
+
+  const webhookEndpoint = process.env.WEBHOOK_ENDPOINT || '/webhook'
+  const port = parseInt(process.env.PORT || '8081', 10)
+  const sendToUrl = process.env.SEND_TO_URL || `${baseUrl}${webhookEndpoint}`
+  const adminWebId = process.env.ADMIN_WEBID || ''
 
   const whitelistedIssuers = whitelistedIssuersStr.split(',').map((s) => s.trim())
 
@@ -43,13 +41,13 @@ export function loadConfig(): Config {
     webId,
     issuer,
     baseUrl,
-    webhookEndpoint: process.env.WEBHOOK_ENDPOINT || '/webhook',
-    port: parseInt(process.env.PORT || '8081', 10),
-    sendToUrl: process.env.SEND_TO_URL || '',
+    webhookEndpoint,
+    port,
+    sendToUrl,
     whitelistedIssuers,
     webhookConfigUrl,
     handlerBaseUrl,
-    adminWebId: process.env.ADMIN_WEBID,
+    adminWebId,
   }
 }
 

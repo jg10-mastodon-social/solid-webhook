@@ -36,12 +36,12 @@ describe('Main Entry Point', () => {
 
   describe('main.ts execution', () => {
     it('should be runnable with all config present', async () => {
-      process.env.WEBID = 'https://pod.example.com/profile/card#me'
-      process.env.ISSUER = 'https://solidcommunity.net'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
       process.env.BASE_URL = 'http://localhost:8081'
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://solidcommunity.net'
       process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
 
       const { loadConfig } = await import('../src/config.js')
@@ -54,8 +54,6 @@ describe('Main Entry Point', () => {
     })
 
     it('should fail without WEBHOOK_CONFIG_URL', async () => {
-      process.env.WEBID = 'https://pod.example.com/profile/card#me'
-      process.env.ISSUER = 'https://pod.example.com'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
       process.env.BASE_URL = 'http://localhost:8081'
       delete process.env.WEBHOOK_CONFIG_URL
@@ -65,8 +63,6 @@ describe('Main Entry Point', () => {
     })
 
     it('should fail without HANDLER_BASE_URL', async () => {
-      process.env.WEBID = 'https://pod.example.com/profile/card#me'
-      process.env.ISSUER = 'https://pod.example.com'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
       process.env.BASE_URL = 'http://localhost:8081'
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
@@ -97,14 +93,11 @@ describe('Main Entry Point', () => {
 
   describe('Webhook subscription handling', () => {
     it('should not subscribe to topics with unknown handlers', async () => {
-      process.env.WEBID = 'https://pod.example.com/profile/card#me'
-      process.env.ISSUER = 'https://solidcommunity.net'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
-      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
       process.env.BASE_URL = 'http://localhost:8083'
-      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
 
       const rdfContent = `
 @prefix : <https://pod.example.com/handlers#>.
@@ -143,14 +136,11 @@ describe('Main Entry Point', () => {
     })
 
     it('should subscribe to topics with known handlers', async () => {
-      process.env.WEBID = 'https://pod.example.com/profile/card#me'
-      process.env.ISSUER = 'https://solidcommunity.net'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
-      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
       process.env.BASE_URL = 'http://localhost:8083'
-      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
 
       const rdfContent = `
 @prefix : <https://pod.example.com/handlers#>.
@@ -187,14 +177,11 @@ describe('Main Entry Point', () => {
 
   describe('Webhook config fetch failure', () => {
     it('should not crash server when webhook config fetch fails', async () => {
-      process.env.WEBID = 'https://pod.example.com/profile/card#me'
-      process.env.ISSUER = 'https://solidcommunity.net'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
-      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
       process.env.BASE_URL = 'http://localhost:8081'
-      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
 
       mockFetch.mockResolvedValue({
         ok: false,
@@ -218,14 +205,11 @@ describe('Main Entry Point', () => {
     })
 
     it('should subscribe to the webhook config URL itself', async () => {
-      process.env.WEBID = 'https://pod.example.com/profile/card#me'
-      process.env.ISSUER = 'https://solidcommunity.net'
       process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
-      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
       process.env.BASE_URL = 'http://localhost:8081'
-      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
 
       const rdfContent = `
         @prefix solid: <http://www.w3.org/ns/solid/terms#>.
