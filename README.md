@@ -33,16 +33,19 @@ Copy `.env.example` to `.env` and configure:
 cp .env.example .env
 ```
 
-Required variables:
-- `WEBID` - Your Solid WebID
-- `ISSUER` - OIDC issuer (must be in WHITELISTED_ISSUERS)
-- `WHITELISTED_ISSUERS` - Comma-separated list of allowed issuers
-- `BASE_URL` - Base URL for the server (e.g., http://localhost:8081)
+**Required:**
+- `WHITELISTED_ISSUERS` - Comma-separated list of allowed OIDC issuers
+- `WEBHOOK_CONFIG_URL` - URL to load webhook RDF configuration from
+- `HANDLER_BASE_URL` - Namespace prefix for handler types (must end with #)
+- `BASE_URL` - Base URL for this server (used as issuer, webid origin, and callback URL)
 
-Optional variables:
+**Optional:**
+- `WEBID` - Solid WebID of this server (default: `<BASE_URL>/webid`)
+- `ISSUER` - OIDC issuer (default: `<BASE_URL>`)
+- `ADMIN_WEBID` - WebID for /subscriptions admin access (default: empty = all access denied)
+- `SEND_TO_URL` - URL where webhooks are received (default: `<BASE_URL><WEBHOOK_ENDPOINT>`)
 - `WEBHOOK_ENDPOINT` - Webhook endpoint path (default: /webhook)
 - `PORT` - Server port (default: 8081)
-- `SEND_TO_URL` - URL where webhooks are received
 
 ### Webhook Registration (RDF)
 
