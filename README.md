@@ -1,5 +1,7 @@
 # solid-webhook
 
+![No maintenance intended](https://img.shields.io/badge/no_maintenance_intended-orange) ![Code quality: TDD vibe coded](https://img.shields.io/badge/code_quality-TDD_vibe_coded-orange)
+
 Solid pod webhook listener server built with Koa and @soid/koa.
 
 ## Features
@@ -48,46 +50,9 @@ See `docs/webhooks.ttl.example` for the RDF schema format. Store your webhook co
 
 ## Usage
 
-### Basic Server
-
-```typescript
-import { createApp, subscribeAll, startServer } from './src/index.js'
-import { createSolidFetch } from './src/services/solidFetch.js'
-import { handleInboxModified } from './src/handlers/inboxModified.js'
-import { parseWebhooksFromRDF } from './src/config.js'
-import { loadConfig } from './src/config.js'
-
-const config = loadConfig()
-
-const fetchFn = await createSolidFetch(config.webId, config.issuer)
-
-// Load webhook registrations from RDF
-const webhooks = await parseWebhooksFromRDF(rdfContent, 'https://example.com/handlers')
-const registrations = webhooks.map(w => ({
-  topic: w.topic,
-  callback: (event) => handleInboxModified(event, fetchFn),
-}))
-
-// Create and start server
-const app = await createApp(config, registrations)
-const subscriptions = await subscribeAll(registrations, fetchFn, config.sendToUrl)
-
-await startServer(app, config.port)
-```
-
-### Command Line
-
 ```bash
 npm start
 ```
-
-Or with environment file:
-
-```bash
-cp .env.example .env
-npm start
-```
-
 ## Testing
 
 ```bash
@@ -111,9 +76,4 @@ The server uses solidIdentity from @soid/koa to provide identity routes. Custom 
 - `/.well-known/openid-configuration` - OIDC configuration (no jwks_uri)
 - `/webid` - Turtle WebID document with OIDC issuer
 
-## Security
 
-- DPoP tokens are validated using @solid/access-token-verifier for cryptographic signature verification
-- DPoP binding between access token and proof token is verified
-- WebID is extracted from verified token and available in `ctx.state.webId`
-- JTI replay protection is handled by the token verifier
