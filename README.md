@@ -4,13 +4,21 @@
 
 Solid pod webhook listener server built with Koa and @soid/koa.
 
+Fetches a webhook configuration specifying resources to subscribe to and handlers to dispatch when a notification is received.
+
+Permissions need to be granted to the agent's webid.
+
 ## Features
 
 - WebhookChannel2023 subscription to Solid pods
-- DPoP authentication middleware
+- Agent-hosted webid - grant permissions rather than logging in
 - RDF-based webhook configuration
+- Only accepts notifications from whitelisted pods
+- DPoP authentication middleware
 - Inbox event handlers
 - Solid OIDC identity via @soid/koa solidIdentity
+- Admin summary page /subscriptions
+- Listens to additions to webhook configuration
 
 ## Prerequisites
 
@@ -34,18 +42,10 @@ cp .env.example .env
 ```
 
 **Required:**
-- `WHITELISTED_ISSUERS` - Comma-separated list of allowed OIDC issuers
+- `BASE_URL` - Base URL for this server (used for issuer, webid origin, and callback URL)
 - `WEBHOOK_CONFIG_URL` - URL to load webhook RDF configuration from
+- `WHITELISTED_ISSUERS` - Comma-separated list of allowed OIDC issuers
 - `HANDLER_BASE_URL` - Namespace prefix for handler types (must end with #)
-- `BASE_URL` - Base URL for this server (used as issuer, webid origin, and callback URL)
-
-**Optional:**
-- `WEBID` - Solid WebID of this server (default: `<BASE_URL>/webid`)
-- `ISSUER` - OIDC issuer (default: `<BASE_URL>`)
-- `ADMIN_WEBID` - WebID for /subscriptions admin access (default: empty = all access denied)
-- `SEND_TO_URL` - URL where webhooks are received (default: `<BASE_URL><WEBHOOK_ENDPOINT>`)
-- `WEBHOOK_ENDPOINT` - Webhook endpoint path (default: /webhook)
-- `PORT` - Server port (default: 8081)
 
 ### Webhook Registration (RDF)
 
