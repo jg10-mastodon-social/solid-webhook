@@ -15,6 +15,7 @@
     "@koa/router": "^13.0.0",
     "@soid/core": "^0.1.0",
     "@soid/koa": "^0.1.0",
+    "@solid/access-token-verifier": "^2.1.1",
     "jose": "^5.9.6",
     "jsonld": "^8.3.2",
     "koa": "^2.15.4",

@@ -37,6 +37,10 @@ export interface Config {
 }
 
 declare module 'koa' {
+  interface DefaultState {
+    webId?: string
+    clientId?: string
+  }
   interface DefaultContext {
     registrations?: WebhookRegistration[]
   }

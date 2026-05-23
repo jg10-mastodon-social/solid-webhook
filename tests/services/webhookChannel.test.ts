@@ -146,6 +146,108 @@ describe('WebhookChannel Service', () => {
         )
       ).rejects.toThrow('No WebhookChannel2023 socket found')
     })
+
+    it('should find storage description when not first in multi-value Link header', async () => {
+      const mockSubscriptionResponse = JSON.stringify({
+        '@context': 'https://www.w3.org/ns/solid/notification/v1',
+        type: 'http://www.w3.org/ns/solid/notifications#WebhookChannel2023',
+        id: 'https://pod.example.com/webhook/456',
+        receiveFrom: 'https://pod.example.com/webhook/receive/456',
+      })
+
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          return new Response(null, {
+            status: 200,
+            headers: {
+              'link': '<http://www.w3.org/ns/ldp#Resource>; rel="type", <https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+            },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === undefined) {
+          return new Response(mockSocketList, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === 'POST') {
+          return new Response(mockSubscriptionResponse, {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      const result = await subscribeWebhookChannel(
+        'https://pod.example.com/inbox/',
+        'https://pod.example.com/webhook/',
+        mockFetch
+      )
+
+      expect(result).toMatchObject({
+        id: 'https://pod.example.com/webhook/456',
+        receiveFrom: 'https://pod.example.com/webhook/receive/456',
+        topic: 'https://pod.example.com/inbox/',
+      })
+    })
+
+    it('should find storage description when Link header has multiple separate entries', async () => {
+      const mockSubscriptionResponse = JSON.stringify({
+        '@context': 'https://www.w3.org/ns/solid/notification/v1',
+        type: 'http://www.w3.org/ns/solid/notifications#WebhookChannel2023',
+        id: 'https://pod.example.com/webhook/789',
+        receiveFrom: 'https://pod.example.com/webhook/receive/789',
+      })
+
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          const headers = new Headers()
+          headers.append('link', '<http://www.w3.org/ns/ldp#Resource>; rel="type"')
+          headers.append('link', '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"')
+          return new Response(null, { status: 200, headers })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === undefined) {
+          return new Response(mockSocketList, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === 'POST') {
+          return new Response(mockSubscriptionResponse, {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      const result = await subscribeWebhookChannel(
+        'https://pod.example.com/inbox/',
+        'https://pod.example.com/webhook/',
+        mockFetch
+      )
+
+      expect(result).toMatchObject({
+        id: 'https://pod.example.com/webhook/789',
+        receiveFrom: 'https://pod.example.com/webhook/receive/789',
+        topic: 'https://pod.example.com/inbox/',
+      })
+    })
   })
 
   describe('unsubscribeWebhookChannel', () => {

@@ -1,7 +1,7 @@
 import Koa from 'koa'
 import Router from '@koa/router'
 import { solidIdentity } from '@soid/koa'
-import { createDpopMiddleware } from './middleware/dpopAuth.js'
+import { createSolidAuthMiddleware } from './middleware/solidAuth.js'
 import { subscribeWebhookChannel, unsubscribeWebhookChannel } from './services/webhookChannel.js'
 import type { Config, WebhookRegistration, SubscriptionInfo } from './types/index.js'
 import type { SolidFetch } from './types/index.js'
@@ -14,14 +14,13 @@ export async function createApp(config: Config): Promise<Koa> {
   const router = new Router()
   
   router.use(solidIdentity(config.webId, config.baseUrl).routes())
-  
-  const dpopMiddleware = createDpopMiddleware(
-    config.whitelistedIssuers,
+
+  const solidAuthMiddleware = createSolidAuthMiddleware(
     config.sendToUrl,
     'POST'
   )
 
-  router.post(config.webhookEndpoint, dpopMiddleware, async (ctx) => {
+  router.post(config.webhookEndpoint, solidAuthMiddleware, async (ctx) => {
     const body = (ctx.request as { body?: Record<string, unknown> }).body || {}
     const registrations = ctx.app.context.registrations
     

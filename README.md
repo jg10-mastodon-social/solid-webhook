@@ -98,7 +98,7 @@ npm run typecheck  # Check TypeScript
 ## Architecture
 
 - `src/index.ts` - Koa server with identity endpoints and subscription management
-- `src/middleware/dpopAuth.ts` - DPoP token verification with JTI replay protection
+- `src/middleware/solidAuth.ts` - DPoP token verification using @solid/access-token-verifier
 - `src/services/webhookChannel.ts` - WebhookChannel2023 subscription/unsubscription
 - `src/services/solidFetch.ts` - Authenticated fetch using @soid/koa
 - `src/handlers/inboxModified.ts` - Inbox event processing
@@ -113,6 +113,7 @@ The server uses solidIdentity from @soid/koa to provide identity routes. Custom 
 
 ## Security
 
-- DPoP tokens are validated for htu (target URL), htm (HTTP method), and issuer
-- JTI values are tracked to prevent replay attacks
-- Only whitelisted issuers are accepted
+- DPoP tokens are validated using @solid/access-token-verifier for cryptographic signature verification
+- DPoP binding between access token and proof token is verified
+- WebID is extracted from verified token and available in `ctx.state.webId`
+- JTI replay protection is handled by the token verifier
