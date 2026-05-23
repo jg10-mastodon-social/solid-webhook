@@ -248,6 +248,184 @@ describe('WebhookChannel Service', () => {
         topic: 'https://pod.example.com/inbox/',
       })
     })
+
+    it('should throw specific error for 401 on HEAD request', async () => {
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          return new Response(null, { status: 401 })
+        }
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      await expect(
+        subscribeWebhookChannel(
+          'https://pod.example.com/inbox/',
+          'https://pod.example.com/webhook/',
+          mockFetch
+        )
+      ).rejects.toThrow('Unauthorized to access topic')
+    })
+
+    it('should throw specific error for 403 on HEAD request', async () => {
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          return new Response(null, { status: 403 })
+        }
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      await expect(
+        subscribeWebhookChannel(
+          'https://pod.example.com/inbox/',
+          'https://pod.example.com/webhook/',
+          mockFetch
+        )
+      ).rejects.toThrow('Forbidden to access topic')
+    })
+
+    it('should throw specific error for 401 on storage description fetch', async () => {
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          return new Response(null, {
+            status: 200,
+            headers: {
+              'link': '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+            },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === undefined) {
+          return new Response(null, { status: 401 })
+        }
+
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      await expect(
+        subscribeWebhookChannel(
+          'https://pod.example.com/inbox/',
+          'https://pod.example.com/webhook/',
+          mockFetch
+        )
+      ).rejects.toThrow('Unauthorized to access storage description')
+    })
+
+    it('should throw specific error for 403 on storage description fetch', async () => {
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          return new Response(null, {
+            status: 200,
+            headers: {
+              'link': '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+            },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === undefined) {
+          return new Response(null, { status: 403 })
+        }
+
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      await expect(
+        subscribeWebhookChannel(
+          'https://pod.example.com/inbox/',
+          'https://pod.example.com/webhook/',
+          mockFetch
+        )
+      ).rejects.toThrow('Forbidden to access storage description')
+    })
+
+    it('should throw specific error for 401 on subscription POST', async () => {
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          return new Response(null, {
+            status: 200,
+            headers: {
+              'link': '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+            },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === undefined) {
+          return new Response(mockSocketList, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === 'POST') {
+          return new Response(null, { status: 401 })
+        }
+
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      await expect(
+        subscribeWebhookChannel(
+          'https://pod.example.com/inbox/',
+          'https://pod.example.com/webhook/',
+          mockFetch
+        )
+      ).rejects.toThrow('Unauthorized to subscribe to webhook')
+    })
+
+    it('should throw specific error for 403 on subscription POST', async () => {
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          return new Response(null, {
+            status: 200,
+            headers: {
+              'link': '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+            },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === undefined) {
+          return new Response(mockSocketList, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === 'POST') {
+          return new Response(null, { status: 403 })
+        }
+
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      await expect(
+        subscribeWebhookChannel(
+          'https://pod.example.com/inbox/',
+          'https://pod.example.com/webhook/',
+          mockFetch
+        )
+      ).rejects.toThrow('Forbidden to subscribe to webhook')
+    })
   })
 
   describe('unsubscribeWebhookChannel', () => {

@@ -7,7 +7,13 @@ export async function subscribeWebhookChannel(
   fetch: SolidFetch
 ): Promise<SubscriptionInfo> {
   const headResponse = await fetch(topic, { method: 'HEAD' })
-  
+
+  if (!headResponse.ok) {
+    if (headResponse.status === 401) throw new Error(`Unauthorized to access topic ${topic}: 401`)
+    if (headResponse.status === 403) throw new Error(`Forbidden to access topic ${topic}: 403`)
+    throw new Error(`Failed to fetch topic ${topic}: ${headResponse.status}`)
+  }
+
   const linkHeader = headResponse.headers.get('link')
   if (!linkHeader) {
     throw new Error('No storage description link found')
@@ -20,6 +26,13 @@ export async function subscribeWebhookChannel(
 
   const storageUrl = storageMatch[1]
   const storageResponse = await fetch(storageUrl)
+
+  if (!storageResponse.ok) {
+    if (storageResponse.status === 401) throw new Error(`Unauthorized to access storage description ${storageUrl}: 401`)
+    if (storageResponse.status === 403) throw new Error(`Forbidden to access storage description ${storageUrl}: 403`)
+    throw new Error(`Failed to fetch storage description ${storageUrl}: ${storageResponse.status}`)
+  }
+
   const storageText = await storageResponse.text()
 
   const socketUrl = findWebhookSocketUrl(storageText, storageUrl)
@@ -41,6 +54,8 @@ export async function subscribeWebhookChannel(
   })
 
   if (!subscriptionResponse.ok) {
+    if (subscriptionResponse.status === 401) throw new Error(`Unauthorized to subscribe to webhook: 401`)
+    if (subscriptionResponse.status === 403) throw new Error(`Forbidden to subscribe to webhook: 403`)
     throw new Error(`Subscription failed: ${subscriptionResponse.status}`)
   }
 
