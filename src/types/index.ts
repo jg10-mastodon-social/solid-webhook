@@ -19,7 +19,7 @@ export interface TrackedSubscription {
 }
 
 export interface WebhookEvent {
-  type: 'Add' | 'Remove'
+  type: 'Add' | 'Remove' | 'Update'
   object: string
   topic: string
   raw: unknown
@@ -30,7 +30,19 @@ export type SolidFetch = (
   init?: RequestInit
 ) => Promise<Response>
 
-export type WebhookHandler = (event: WebhookEvent) => void | Promise<void>
+export interface HandlerContext {
+  registrations?: WebhookRegistration[]
+  subscriptions?: TrackedSubscription[]
+  sendToUrl?: string
+  handlerBaseUrl?: string
+  handlers?: Record<string, WebhookHandler>
+}
+
+export type WebhookHandler = (
+  event: WebhookEvent,
+  fetch: SolidFetch,
+  context?: HandlerContext
+) => void | Promise<void>
 
 export interface Config {
   webId: string
@@ -53,5 +65,7 @@ declare module 'koa' {
   interface DefaultContext {
     registrations?: WebhookRegistration[]
     subscriptions?: TrackedSubscription[]
+    sendToUrl?: string
+    handlerBaseUrl?: string
   }
 }

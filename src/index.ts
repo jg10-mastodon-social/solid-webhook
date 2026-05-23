@@ -44,7 +44,7 @@ export async function createApp(config: Config): Promise<Koa> {
           object: body.object as string,
           topic: matchingReg.topic,
           raw: body,
-        })
+        }, ctx.app.context.fetch as SolidFetch, ctx.app.context)
       }
     }
 

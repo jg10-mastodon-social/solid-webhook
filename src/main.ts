@@ -1,13 +1,15 @@
 import { loadConfig, parseWebhooksFromRDF } from './config.js'
 import { createSolidFetch } from './services/solidFetch.js'
 import { handleInboxModified } from './handlers/inboxModified.js'
+import { handleUpdateWebhooks } from './handlers/updateWebhooks.js'
 import { createApp, startServer, subscribeAll, unsubscribeAll } from './index.js'
 import type { SolidFetch, WebhookRegistration } from './types/index.js'
 
-const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, fetch: SolidFetch) => Promise<void>> = {
-  InboxModified: async (event, fetch) => {
-    await handleInboxModified(event, fetch)
+const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, fetch: SolidFetch, context: any) => void | Promise<void>> = {
+  InboxModified: async (event, fetch, ctx) => {
+    await handleInboxModified(event, fetch, ctx)
   },
+  UpdateWebhooks: handleUpdateWebhooks,
 }
 
 export async function main(): Promise<void> {
@@ -48,19 +50,32 @@ export async function main(): Promise<void> {
     console.error('Server will continue without webhook subscriptions')
   }
 
-  const registrations: WebhookRegistration[] = webhooks.map(w => ({
+const registrations: WebhookRegistration[] = webhooks.map(w => ({
     topic: w.topic,
-    callback: async (event) => {
+    callback: async (event, fetch) => {
       const handler = handlers[w.handler]
       if (!handler) {
-        throw new Error(`Unknown handler: ${w.handler}`)
+        console.error(`Unknown handler: ${w.handler}`)
+        return
       }
-      await handler(event, fetchFn)
+      await handler(event, fetch, app.context)
     },
     actor: w.actor,
   }))
 
+  // Also subscribe to the config URL itself so changes to it trigger re-parsing
+  const configRegistration: WebhookRegistration = {
+    topic: config.webhookConfigUrl,
+    callback: async (event, fetch) => {
+      await handlers.UpdateWebhooks(event, fetch, app.context)
+    },
+  }
+  registrations.unshift(configRegistration)
+
   app.context.registrations = registrations
+  app.context.handlers = handlers
+  app.context.sendToUrl = config.sendToUrl
+  app.context.handlerBaseUrl = config.handlerBaseUrl
 
   console.log('Subscribing to webhook channels...')
   const subscriptions = await subscribeAll(registrations, fetchFn, config.sendToUrl)

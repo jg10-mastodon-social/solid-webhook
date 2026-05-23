@@ -125,5 +125,59 @@ describe('Main Entry Point', () => {
 
       consoleErrorSpy.mockRestore()
     })
+
+    it('should subscribe to the webhook config URL itself', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://solidcommunity.net'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
+      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
+      process.env.BASE_URL = 'http://localhost:8081'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+
+      const rdfContent = `
+        @prefix solid: <http://www.w3.org/ns/solid/terms#>.
+        <https://pod.example.com/handlers#webhook1> a <https://pod.example.com/handlers#WebHook>;
+          solid:topic <https://pod.example.com/inbox/>;
+          solid:handler <https://pod.example.com/handlers#InboxModified>.
+      `
+
+      let callCount = 0
+      mockFetch.mockImplementation((url: string) => {
+        if (url === 'https://pod.example.com/webhooks.ttl') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            text: () => Promise.resolve(rdfContent),
+          })
+        }
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
+      })
+
+      const { subscribeWebhookChannel } = await import('../src/services/webhookChannel.js')
+      vi.mocked(subscribeWebhookChannel).mockImplementation((topic: string) => {
+        callCount++
+        return Promise.resolve({
+          id: `https://pod.example.com/webhook/${callCount}`,
+          receiveFrom: `https://pod.example.com/webhook/receive/${callCount}`,
+          topic,
+        })
+      })
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const { main } = await import('../src/main.js')
+
+      main()
+
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      const calls = vi.mocked(subscribeWebhookChannel).mock.calls
+      expect(calls.some(call => call[0] === 'https://pod.example.com/webhooks.ttl')).toBe(true)
+
+      consoleErrorSpy.mockRestore()
+    })
   })
 })

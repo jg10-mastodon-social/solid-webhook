@@ -75,8 +75,9 @@ describe('Types', () => {
 
   describe('WebhookHandler', () => {
     it('should be an async function type', async () => {
+      const mockFetch = vi.fn()
       const handler: WebhookHandler = vi.fn().mockResolvedValue(undefined)
-      await handler({ type: 'Add', object: '', topic: '', raw: {} })
+      await handler({ type: 'Add', object: '', topic: '', raw: {} }, mockFetch)
       expect(handler).toHaveBeenCalled()
     })
   })

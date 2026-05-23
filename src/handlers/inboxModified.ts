@@ -2,7 +2,8 @@ import type { WebhookEvent, SolidFetch } from '../types/index.js'
 
 export async function handleInboxModified(
   event: WebhookEvent,
-  fetch: SolidFetch
+  fetch: SolidFetch,
+  _context?: unknown
 ): Promise<boolean> {
   if (event.type === 'Remove') {
     return false
