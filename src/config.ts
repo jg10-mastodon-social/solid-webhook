@@ -33,6 +33,9 @@ export function loadConfig(): Config {
   if (!baseUrl) {
     throw new Error('BASE_URL is required')
   }
+  if (!process.env.ADMIN_WEBID) {
+    throw new Error('ADMIN_WEBID is required')
+  }
 
   const whitelistedIssuers = whitelistedIssuersStr.split(',').map((s) => s.trim())
 
@@ -46,6 +49,7 @@ export function loadConfig(): Config {
     whitelistedIssuers,
     webhookConfigUrl,
     handlerBaseUrl,
+    adminWebId: process.env.ADMIN_WEBID,
   }
 }
 

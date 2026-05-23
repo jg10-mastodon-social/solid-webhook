@@ -24,6 +24,7 @@ describe('Config', () => {
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
       process.env.BASE_URL = 'http://localhost:8080'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
 
       const { loadConfig } = await import('../src/config.js')
       const config = loadConfig()
@@ -37,6 +38,7 @@ describe('Config', () => {
       expect(config.webhookConfigUrl).toBe('https://pod.example.com/webhooks.ttl')
       expect(config.handlerBaseUrl).toBe('https://pod.example.com/handlers#')
       expect(config.baseUrl).toBe('http://localhost:8080')
+      expect(config.adminWebId).toBe('https://pod.example.com/profile/card#me')
     })
 
     it('should throw if required WEBID is missing', async () => {
@@ -108,6 +110,7 @@ describe('Config', () => {
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/settings/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/settings/webhooks.ttl#'
       process.env.BASE_URL = 'http://localhost:8081'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
 
       const { loadConfig } = await import('../src/config.js')
       const config = loadConfig()
@@ -124,6 +127,7 @@ describe('Config', () => {
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
       process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
       process.env.BASE_URL = 'http://localhost:8081'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
       delete process.env.PORT
       delete process.env.WEBHOOK_ENDPOINT
 
@@ -142,6 +146,7 @@ describe('Config', () => {
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
       process.env.BASE_URL = 'http://localhost:8081'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
 
       const { loadConfig } = await import('../src/config.js')
       const config = loadConfig()

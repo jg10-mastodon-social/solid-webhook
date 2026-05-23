@@ -10,6 +10,14 @@ export interface SubscriptionInfo {
   topic: string
 }
 
+export interface TrackedSubscription {
+  id: string
+  receiveFrom: string
+  topic: string
+  status: 'active' | 'failed'
+  error?: string
+}
+
 export interface WebhookEvent {
   type: 'Add' | 'Remove'
   object: string
@@ -34,6 +42,7 @@ export interface Config {
   whitelistedIssuers: string[]
   webhookConfigUrl: string
   handlerBaseUrl: string
+  adminWebId: string
 }
 
 declare module 'koa' {
@@ -43,5 +52,6 @@ declare module 'koa' {
   }
   interface DefaultContext {
     registrations?: WebhookRegistration[]
+    subscriptions?: TrackedSubscription[]
   }
 }

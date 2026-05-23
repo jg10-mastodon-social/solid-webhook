@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@koa/cors": "^5.0.0",
     "@koa/router": "^13.0.0",
     "@soid/core": "^0.1.0",
     "@soid/koa": "^0.1.0",

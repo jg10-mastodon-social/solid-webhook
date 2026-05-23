@@ -41,6 +41,7 @@ describe('Main Entry Point', () => {
       process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
       process.env.BASE_URL = 'http://localhost:8081'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
 
       const { loadConfig } = await import('../src/config.js')
       const config = loadConfig()
@@ -102,6 +103,7 @@ describe('Main Entry Point', () => {
       process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
       process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
       process.env.BASE_URL = 'http://localhost:8081'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
 
       mockFetch.mockResolvedValue({
         ok: false,

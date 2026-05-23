@@ -64,7 +64,9 @@ export async function main(): Promise<void> {
 
   console.log('Subscribing to webhook channels...')
   const subscriptions = await subscribeAll(registrations, fetchFn, config.sendToUrl)
-  console.log(`Subscribed to ${subscriptions.length} webhook channels`)
+  app.context.subscriptions = subscriptions
+  const activeCount = subscriptions.filter(s => s.status === 'active').length
+  console.log(`Subscribed to ${activeCount}/${subscriptions.length} webhook channels`)
 
   console.log(`Solid Webhook server running on port ${config.port}`)
 

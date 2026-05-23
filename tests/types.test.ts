@@ -93,6 +93,7 @@ describe('Types', () => {
         whitelistedIssuers: ['https://solidcommunity.net', 'https://pod.example.com'],
         webhookConfigUrl: 'https://example.com/webhooks.ttl',
         handlerBaseUrl: 'https://example.com/handlers#',
+        adminWebId: 'https://example.com/profile/card#me',
       }
       expect(config.webId).toBeDefined()
       expect(config.issuer).toBeDefined()
@@ -100,6 +101,7 @@ describe('Types', () => {
       expect(Array.isArray(config.whitelistedIssuers)).toBe(true)
       expect(config.webhookConfigUrl).toBeDefined()
       expect(config.handlerBaseUrl).toBeDefined()
+      expect(config.adminWebId).toBeDefined()
     })
   })
 })
