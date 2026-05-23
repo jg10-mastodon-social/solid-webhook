@@ -50,18 +50,29 @@ export async function main(): Promise<void> {
     console.error('Server will continue without webhook subscriptions')
   }
 
-const registrations: WebhookRegistration[] = webhooks.map(w => ({
-    topic: w.topic,
-    callback: async (event, fetch) => {
-      const handler = handlers[w.handler]
-      if (!handler) {
-        console.error(`Unknown handler: ${w.handler}`)
-        return
-      }
-      await handler(event, fetch, app.context)
-    },
-    actor: w.actor,
-  }))
+const validRegistrations: WebhookRegistration[] = []
+  const failedSubscriptions: import('./types/index.js').TrackedSubscription[] = []
+
+  for (const w of webhooks) {
+    if (!handlers[w.handler]) {
+      console.error(`Skipping subscription to ${w.topic}: Unknown handler '${w.handler}'`)
+      failedSubscriptions.push({
+        id: '',
+        receiveFrom: '',
+        topic: w.topic,
+        status: 'failed',
+        error: `Unknown handler: ${w.handler}`,
+      })
+    } else {
+      validRegistrations.push({
+        topic: w.topic,
+        callback: async (event, fetch) => {
+          await handlers[w.handler](event, fetch, app.context)
+        },
+        actor: w.actor,
+      })
+    }
+  }
 
   // Also subscribe to the config URL itself so changes to it trigger re-parsing
   const configRegistration: WebhookRegistration = {
@@ -70,18 +81,18 @@ const registrations: WebhookRegistration[] = webhooks.map(w => ({
       await handlers.UpdateWebhooks(event, fetch, app.context)
     },
   }
-  registrations.unshift(configRegistration)
+  validRegistrations.unshift(configRegistration)
 
-  app.context.registrations = registrations
+  app.context.registrations = validRegistrations
   app.context.handlers = handlers
   app.context.sendToUrl = config.sendToUrl
   app.context.handlerBaseUrl = config.handlerBaseUrl
 
   console.log('Subscribing to webhook channels...')
-  const subscriptions = await subscribeAll(registrations, fetchFn, config.sendToUrl)
-  app.context.subscriptions = subscriptions
+  const subscriptions = await subscribeAll(validRegistrations, fetchFn, config.sendToUrl)
+  app.context.subscriptions = [...failedSubscriptions, ...subscriptions]
   const activeCount = subscriptions.filter(s => s.status === 'active').length
-  console.log(`Subscribed to ${activeCount}/${subscriptions.length} webhook channels`)
+  console.log(`Subscribed to ${activeCount}/${subscriptions.length + failedSubscriptions.length} webhook channels`)
 
   console.log(`Solid Webhook server running on port ${config.port}`)
 

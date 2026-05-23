@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { subscribeWebhookChannel } from '../src/services/webhookChannel.js'
 
 vi.mock('@soid/koa', () => ({
   getAuthenticatedFetch: vi.fn().mockResolvedValue(vi.fn()),
@@ -91,6 +92,96 @@ describe('Main Entry Point', () => {
       expect(webhooks).toHaveLength(1)
       expect(webhooks[0].topic).toBe('https://pod.example.com/inbox/')
       expect(webhooks[0].handler).toBe('InboxModified')
+    })
+  })
+
+  describe('Webhook subscription handling', () => {
+    it('should not subscribe to topics with unknown handlers', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://solidcommunity.net'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
+      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
+      process.env.BASE_URL = 'http://localhost:8083'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+
+      const rdfContent = `
+@prefix : <https://pod.example.com/handlers#>.
+<https://pod.example.com/handlers#webhook1> a :WebHook;
+  :topic <https://pod.example.com/tasks/main/>;
+  :handler <https://pod.example.com/handlers#UnknownHandler>.
+      `.trim()
+
+      mockFetch.mockImplementation((url: string) => {
+        if (url === 'https://pod.example.com/webhooks.ttl') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            text: () => Promise.resolve(rdfContent),
+          })
+        }
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
+      })
+
+      vi.mocked(subscribeWebhookChannel).mockClear()
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const { main } = await import('../src/main.js')
+
+      main()
+
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const subscribeCalls = vi.mocked(subscribeWebhookChannel).mock.calls
+      const topicsSubscribed = subscribeCalls.map(call => call[0])
+      expect(topicsSubscribed).not.toContain('https://pod.example.com/tasks/main/')
+
+      consoleErrorSpy.mockRestore()
+    })
+
+    it('should subscribe to topics with known handlers', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://solidcommunity.net'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
+      process.env.SEND_TO_URL = 'https://pod.example.com/webhook/'
+      process.env.BASE_URL = 'http://localhost:8083'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+
+      const rdfContent = `
+@prefix : <https://pod.example.com/handlers#>.
+<https://pod.example.com/handlers#webhook1> a :WebHook;
+  :topic <https://pod.example.com/inbox/>;
+  :handler <https://pod.example.com/handlers#InboxModified>.
+      `.trim()
+
+      mockFetch.mockImplementation((url: string) => {
+        if (url === 'https://pod.example.com/webhooks.ttl') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            text: () => Promise.resolve(rdfContent),
+          })
+        }
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
+      })
+
+      vi.mocked(subscribeWebhookChannel).mockClear()
+
+      const { main } = await import('../src/main.js')
+
+      main()
+
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const subscribeCalls = vi.mocked(subscribeWebhookChannel).mock.calls
+      const topicsSubscribed = subscribeCalls.map(call => call[0])
+      expect(topicsSubscribed).toContain('https://pod.example.com/inbox/')
     })
   })
 
