@@ -25,6 +25,7 @@ vi.mock('@solid/access-token-verifier', () => ({
     createSolidTokenVerifier: () => async () => ({
       webid: 'https://pod.example.com/profile/card#me',
       client_id: 'https://pod.example.com/client#id',
+      iss: 'https://pod.example.com',
     }),
   },
 }))
@@ -224,6 +225,35 @@ describe('Koa Server', () => {
       expect(body).toContain('failed')
     })
 
+    it('should return 403 for non-whitelisted issuer', async () => {
+      const { createApp, startServer } = await import('../src/index.js')
+      const app = await createApp({
+        webId: adminWebId,
+        issuer: 'https://pod.example.com',
+        webhookEndpoint: '/webhook',
+        port: 8091,
+        sendToUrl: 'https://pod.example.com/webhook/',
+        whitelistedIssuers: ['https://trusted.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8091',
+        adminWebId,
+      })
+
+      server = await startServer(app, 8091)
+
+      const response = await fetch('http://localhost:8091/subscriptions', {
+        headers: {
+          authorization: 'Bearer test-token',
+          dpop: 'test-dpop-header',
+        },
+      })
+
+      expect(response.status).toBe(403)
+      const body = await response.text()
+      expect(body).toContain('Issuer not allowed')
+    })
+
     it('should show active status for successful subscriptions', async () => {
       const { createApp, startServer } = await import('../src/index.js')
       const app = await createApp({
@@ -261,26 +291,39 @@ describe('Koa Server', () => {
     })
   })
 
-  describe('createApp', () => {
-    it('should create a Koa app', async () => {
-      const { createApp } = await import('../src/index.js')
+  describe('Webhook endpoint', () => {
+    it('should return 403 for non-whitelisted issuer', async () => {
+      const { createApp, startServer } = await import('../src/index.js')
       const app = await createApp({
         webId: 'https://pod.example.com/profile/card#me',
         issuer: 'https://pod.example.com',
         webhookEndpoint: '/webhook',
-        port: 8081,
+        port: 8092,
         sendToUrl: 'https://pod.example.com/webhook/',
-        whitelistedIssuers: ['https://pod.example.com'],
+        whitelistedIssuers: ['https://other-trusted.example.com'],
         webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
         handlerBaseUrl: 'https://pod.example.com/handlers#',
-        baseUrl: 'http://localhost:8081',
+        baseUrl: 'http://localhost:8092',
         adminWebId: 'https://pod.example.com/profile/card#me',
       })
-      expect(app).toBeDefined()
-    })
-  })
 
-  describe('Webhook endpoint', () => {
+      server = await startServer(app, 8092)
+
+      const response = await fetch('http://localhost:8092/webhook', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          dpop: 'test-dpop-header',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'Add', object: 'https://example.com/activity' }),
+      })
+
+      expect(response.status).toBe(403)
+      const body = await response.text()
+      expect(body).toContain('Issuer not allowed')
+    })
+
     it('should reject unauthenticated requests', async () => {
       const { createApp, startServer } = await import('../src/index.js')
       const app = await createApp({

@@ -3,7 +3,8 @@ import type { Context, Next } from 'koa'
 
 export function createSolidAuthMiddleware(
   expectedUrl: string,
-  expectedMethod: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD' = 'POST'
+  expectedMethod: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD' = 'POST',
+  whitelistedIssuers: string[] = []
 ): (ctx: Context, next: Next) => Promise<void> {
   return async (ctx: Context, next: Next): Promise<void> => {
     const authHeader = ctx.headers.authorization
@@ -31,14 +32,21 @@ export function createSolidAuthMiddleware(
 
     try {
       console.log(`[solidAuth] Verifying token...`)
-      const { webid: webId, client_id: clientId } = await verifier.createSolidTokenVerifier()(
+      const payload = await verifier.createSolidTokenVerifier()(
         authHeader,
         { header: dpopValue, method: expectedMethod, url: expectedUrl }
       )
 
-      console.log(`[solidAuth] Token verified, webId: ${webId}`)
-      ctx.state.webId = webId
-      ctx.state.clientId = clientId
+      console.log(`[solidAuth] Token verified, webId: ${payload.webid}`)
+      ctx.state.webId = payload.webid
+      ctx.state.clientId = payload.client_id
+
+      if (whitelistedIssuers.length > 0 && !whitelistedIssuers.includes(payload.iss)) {
+        console.log(`[solidAuth] DENIED: Issuer not allowed: ${payload.iss}`)
+        ctx.status = 403
+        ctx.body = 'Issuer not allowed'
+        return
+      }
 
       await next()
     } catch (error) {

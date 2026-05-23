@@ -19,12 +19,14 @@ export async function createApp(config: Config): Promise<Koa> {
 
   const solidAuthMiddleware = createSolidAuthMiddleware(
     config.sendToUrl,
-    'POST'
+    'POST',
+    config.whitelistedIssuers
   )
 
   const solidAuthMiddlewareForGet = createSolidAuthMiddleware(
     config.baseUrl + '/subscriptions',
-    'GET'
+    'GET',
+    config.whitelistedIssuers
   )
 
   const adminAuthMiddleware = createAdminAuthMiddleware(config.adminWebId)
