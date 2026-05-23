@@ -15,7 +15,7 @@ npm run test:run   # Single run
 
 - `WEBID` - Solid WebID
 - `ISSUER` - OIDC issuer
-- `WHITELISTED_ISSUERS` - Comma-separated issuers
+- `WHITELISTED_ISSUERS` - Comma-separated issuers; enforced in `solidAuth.ts` (403 if token `iss` not in list)
 - `WEBHOOK_CONFIG_URL` - URL to load RDF webhook config from
 - `HANDLER_BASE_URL` - Base URL for handler namespace (e.g., `https://example.com/handlers#`)
 
@@ -32,7 +32,7 @@ Tests live alongside source in `tests/` directory, mirroring `src/` structure. R
 - `src/main.ts` - CLI entry point, startup sequence: createApp → startServer → createSolidFetch → fetch config → subscribe
 - `src/index.ts` - Server utilities: createApp, startServer, subscribeAll, unsubscribeAll
 - `src/config.ts` - `loadConfig()` reads all env vars, `parseWebhooksFromRDF()` parses Turtle RDF
-- `src/middleware/dpopAuth.ts` - DPoP verification (htu, htm, iss, jti dedup)
+- `src/middleware/solidAuth.ts` - DPoP auth middleware; enforces whitelistedIssuers (403 if token `iss` not in list)
 - `src/services/webhookChannel.ts` - WebhookChannel2023 subscribe/unsubscribe
 
 ## Testing Notes
