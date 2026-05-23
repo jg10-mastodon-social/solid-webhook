@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/src/main.js",
+    "start": "node --env-file=.env dist/src/main.js",
     "dev": "npm run build && npm start",
     "test": "vitest",
     "test:run": "vitest run",
