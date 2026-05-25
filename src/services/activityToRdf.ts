@@ -1,0 +1,200 @@
+const ACTIVITYSTREAMS_CONTEXT = {
+  '@vocab': '_:',
+  'xsd': 'http://www.w3.org/2001/XMLSchema#',
+  'as': 'https://www.w3.org/ns/activitystreams#',
+  'ldp': 'http://www.w3.org/ns/ldp#',
+  'vcard': 'http://www.w3.org/2006/vcard/ns#',
+  'id': '@id',
+  'type': '@type',
+  'Accept': 'as:Accept',
+  'Activity': 'as:Activity',
+  'IntransitiveActivity': 'as:IntransitiveActivity',
+  'Add': 'as:Add',
+  'Announce': 'as:Announce',
+  'Application': 'as:Application',
+  'Arrive': 'as:Arrive',
+  'Article': 'as:Article',
+  'Audio': 'as:Audio',
+  'Block': 'as:Block',
+  'Collection': 'as:Collection',
+  'CollectionPage': 'as:CollectionPage',
+  'Relationship': 'as:Relationship',
+  'Create': 'as:Create',
+  'Delete': 'as:Delete',
+  'Dislike': 'as:Dislike',
+  'Document': 'as:Document',
+  'Event': 'as:Event',
+  'Follow': 'as:Follow',
+  'Flag': 'as:Flag',
+  'Group': 'as:Group',
+  'Ignore': 'as:Ignore',
+  'Image': 'as:Image',
+  'Invite': 'as:Invite',
+  'Join': 'as:Join',
+  'Leave': 'as:Leave',
+  'Like': 'as:Like',
+  'Link': 'as:Link',
+  'Mention': 'as:Mention',
+  'Note': 'as:Note',
+  'Object': 'as:Object',
+  'Offer': 'as:Offer',
+  'OrderedCollection': 'as:OrderedCollection',
+  'OrderedCollectionPage': 'as:OrderedCollectionPage',
+  'Organization': 'as:Organization',
+  'Page': 'as:Page',
+  'Person': 'as:Person',
+  'Place': 'as:Place',
+  'Profile': 'as:Profile',
+  'Question': 'as:Question',
+  'Reject': 'as:Reject',
+  'Remove': 'as:Remove',
+  'Service': 'as:Service',
+  'TentativeAccept': 'as:TentativeAccept',
+  'TentativeReject': 'as:TentativeReject',
+  'Tombstone': 'as:Tombstone',
+  'Undo': 'as:Undo',
+  'Update': 'as:Update',
+  'Video': 'as:Video',
+  'View': 'as:View',
+  'Listen': 'as:Listen',
+  'Read': 'as:Read',
+  'Move': 'as:Move',
+  'Travel': 'as:Travel',
+  'IsFollowing': 'as:IsFollowing',
+  'IsFollowedBy': 'as:IsFollowedBy',
+  'IsContact': 'as:IsContact',
+  'IsMember': 'as:IsMember',
+  'subject': { '@id': 'as:subject', '@type': '@id' },
+  'relationship': { '@id': 'as:relationship', '@type': '@id' },
+  'actor': { '@id': 'as:actor', '@type': '@id' },
+  'attributedTo': { '@id': 'as:attributedTo', '@type': '@id' },
+  'attachment': { '@id': 'as:attachment', '@type': '@id' },
+  'bcc': { '@id': 'as:bcc', '@type': '@id' },
+  'bto': { '@id': 'as:bto', '@type': '@id' },
+  'cc': { '@id': 'as:cc', '@type': '@id' },
+  'context': { '@id': 'as:context', '@type': '@id' },
+  'current': { '@id': 'as:current', '@type': '@id' },
+  'deliveredTo': { '@id': 'as:deliveredTo', '@type': '@id' },
+  'duration': { '@id': 'as:duration', '@type': 'xsd:duration' },
+  'endTime': { '@id': 'as:endTime', '@type': 'xsd:dateTime' },
+  'first': { '@id': 'as:first', '@type': '@id' },
+  'generator': { '@id': 'as:generator', '@type': '@id' },
+  'icon': { '@id': 'as:icon', '@type': '@id' },
+  'image': { '@id': 'as:image', '@type': '@id' },
+  'inReplyTo': { '@id': 'as:inReplyTo', '@type': '@id' },
+  'instrument': { '@id': 'as:instrument', '@type': '@id' },
+  'last': { '@id': 'as:last', '@type': '@id' },
+  'location': { '@id': 'as:location', '@type': '@id' },
+  'mediaType': { '@id': 'as:mediaType', '@type': 'xsd:string' },
+  'name': { '@id': 'as:name', '@type': 'xsd:string' },
+  'next': { '@id': 'as:next', '@type': '@id' },
+  'object': { '@id': 'as:object', '@type': '@id' },
+  'items': { '@id': 'as:items', '@type': '@id', '@container': '@set' },
+  'orderedItems': { '@id': 'as:orderedItems', '@type': '@id', '@container': '@list' },
+  'oneOf': { '@id': 'as:oneOf', '@type': '@id', '@container': '@set' },
+  'anyOf': { '@id': 'as:anyOf', '@type': '@id', '@container': '@set' },
+  'prev': { '@id': 'as:prev', '@type': '@id' },
+  'preview': { '@id': 'as:preview', '@type': '@id' },
+  'principal': { '@id': 'as:principal', '@type': '@id' },
+  'published': { '@id': 'as:published', '@type': 'xsd:dateTime' },
+  'replies': { '@id': 'as:replies', '@type': '@id' },
+  'startIndex': { '@id': 'as:startIndex', '@type': 'xsd:nonNegativeInteger' },
+  'startTime': { '@id': 'as:startTime', '@type': 'xsd:dateTime' },
+  'summary': { '@id': 'as:summary', '@type': 'xsd:string' },
+  'tag': { '@id': 'as:tag', '@type': '@id', '@container': '@set' },
+  'target': { '@id': 'as:target', '@type': '@id' },
+  'title': { '@id': 'as:title', '@type': 'xsd:string' },
+  'to': { '@id': 'as:to', '@type': '@id', '@container': '@set' },
+  'url': { '@id': 'as:url', '@type': '@id' },
+  'updated': { '@id': 'as:updated', '@type': 'xsd:dateTime' },
+  'partOf': { '@id': 'as:partOf', '@type': '@id' },
+  'repostOf': { '@id': 'as:repostOf', '@type': '@id' },
+  'likes': { '@id': 'as:likes', '@type': '@id' },
+  'shares': { '@id': 'as:shares', '@type': '@id' },
+  'alsoKnownAs': { '@id': 'as:alsoKnownAs', '@type': '@id', '@container': '@set' },
+  'content': { '@id': 'as:content', '@type': 'xsd:string' },
+  'value': { '@id': 'as:value', '@type': 'xsd:string' },
+}
+
+const SECURITY_CONTEXT = {
+  'id': '@id',
+  'type': '@type',
+  'dc': 'http://purl.org/dc/terms/',
+  'sec': 'https://w3id.org/security#',
+  'xsd': 'http://www.w3.org/2001/XMLSchema#',
+  'EcdsaKoblitzSignature2016': 'sec:EcdsaKoblitzSignature2016',
+  'Ed25519Signature2018': 'sec:Ed25519Signature2018',
+  'EncryptedMessage': 'sec:EncryptedMessage',
+  'GraphSignature2012': 'sec:GraphSignature2012',
+  'LinkedDataSignature2015': 'sec:LinkedDataSignature2015',
+  'RsaSignature2017': 'sec:RsaSignature2017',
+  'LinkedDataSignature2016': 'sec:LinkedDataSignature2016',
+  'CryptographicKey': 'sec:Key',
+  'authenticationTag': 'sec:authenticationTag',
+  'canonicalizationAlgorithm': 'sec:canonicalizationAlgorithm',
+  'cipherAlgorithm': 'sec:cipherAlgorithm',
+  'cipherData': 'sec:cipherData',
+  'cipherKey': 'sec:cipherKey',
+  'created': { '@id': 'dc:created', '@type': 'xsd:dateTime' },
+  'creator': { '@id': 'dc:creator', '@type': '@id' },
+  'digestAlgorithm': 'sec:digestAlgorithm',
+  'digestValue': 'sec:digestValue',
+  'domain': 'sec:domain',
+  'encryptionKey': 'sec:encryptionKey',
+  'expiration': { '@id': 'sec:expiration', '@type': 'xsd:dateTime' },
+  'expires': { '@id': 'sec:expiration', '@type': 'xsd:dateTime' },
+  'initializationVector': 'sec:initializationVector',
+  'iterationCount': 'sec:iterationCount',
+  'nonce': 'sec:nonce',
+  'normalizationAlgorithm': 'sec:normalizationAlgorithm',
+  'owner': { '@id': 'sec:owner', '@type': '@id' },
+  'password': 'sec:password',
+  'privateKey': { '@id': 'sec:privateKey', '@type': '@id' },
+  'privateKeyPem': 'sec:privateKeyPem',
+  'publicKey': { '@id': 'sec:publicKey', '@type': '@id' },
+  'publicKeyBase58': 'sec:publicKeyBase58',
+  'publicKeyPem': 'sec:publicKeyPem',
+  'publicKeyWif': 'sec:publicKeyWif',
+  'publicKeyService': { '@id': 'sec:publicKeyService', '@type': '@id' },
+  'revoked': { '@id': 'sec:revoked', '@type': 'xsd:dateTime' },
+  'salt': 'sec:salt',
+  'signature': 'sec:signature',
+  'signatureAlgorithm': 'sec:signatureAlgorithm',
+  'signatureValue': 'sec:signatureValue',
+}
+
+function buildContext(obj: Record<string, unknown>): Record<string, unknown>[] {
+  const contexts = [
+    ACTIVITYSTREAMS_CONTEXT,
+    SECURITY_CONTEXT,
+  ]
+  if (obj['@context']) {
+    const existing = Array.isArray(obj['@context']) ? obj['@context'] : [obj['@context']]
+    return [...contexts, ...existing] as Record<string, unknown>[]
+  }
+  return contexts
+}
+
+export function injectContexts(obj: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...obj }
+  result['@context'] = buildContext(obj)
+  return result
+}
+
+export function skolemizeBlankNodes(turtle: string, baseUri: string): string {
+  let result = turtle
+  let counter = 0
+  const regex = /_:b(\d+)/g
+  const timestamp = Date.now()
+  result = result.replace(regex, () => {
+    const skolem = `${baseUri}${timestamp}_${counter++}`
+    return `<${skolem}>`
+  })
+  return result
+}
+
+export function activityToTurtle(activity: Record<string, unknown>, skolemizeBase?: string): string {
+  const activityWithContext = injectContexts(activity as Record<string, unknown>)
+  const jsonLd = JSON.stringify(activityWithContext)
+  return jsonLd
+}
