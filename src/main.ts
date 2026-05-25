@@ -10,6 +10,10 @@ const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, 
     await handleInboxModified(event, fetch, ctx)
   },
   UpdateWebhooks: handleUpdateWebhooks,
+  CommitHandler: async (event, fetch, ctx) => {
+    const { handleCommitHandler } = await import('./handlers/commitHandler.js')
+    await handleCommitHandler(event, fetch, ctx)
+  },
 }
 
 export async function main(): Promise<void> {
@@ -79,6 +83,16 @@ const validRegistrations: WebhookRegistration[] = []
         callback: async (event, fetch) => {
           await handlers.UpdateWebhooks(event, fetch, app.context)
         },
+        actor: w.actor,
+      })
+    } else if (w.handler === 'CommitHandler') {
+      validRegistrations.push({
+        handler: 'CommitHandler' as const,
+        topic: w.topic,
+        callback: async (event, fetch) => {
+          await handlers.CommitHandler(event, fetch, { ...app.context, gitDir: w.gitDir })
+        },
+        gitDir: w.gitDir!,
         actor: w.actor,
       })
     } else {
