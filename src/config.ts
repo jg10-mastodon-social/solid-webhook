@@ -109,10 +109,24 @@ export async function parseWebhooksFromRDF(
 export function createWebhookRegistrations(
   parsedWebhooks: ParsedWebhook[],
   handlers: Record<string, (event: import('./types/index.js').WebhookEvent) => void | Promise<void>>
-): WebhookRegistration[] {
-  return parsedWebhooks.map((pw) => ({
-    topic: pw.topic,
-    callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
-    actor: pw.actor,
-  }))
+): import('./types/index.js').WebhookRegistration[] {
+  return parsedWebhooks.map((pw) => {
+    if (pw.handler === 'InboxModified') {
+      return {
+        handler: 'InboxModified' as const,
+        topic: pw.topic,
+        callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
+        actor: pw.actor,
+      }
+    }
+    if (pw.handler === 'UpdateWebhooks') {
+      return {
+        handler: 'UpdateWebhooks' as const,
+        topic: pw.topic,
+        callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
+        actor: pw.actor,
+      }
+    }
+    throw new Error(`Unknown handler: ${pw.handler}`)
+  })
 }

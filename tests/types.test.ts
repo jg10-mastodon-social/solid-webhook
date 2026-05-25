@@ -10,12 +10,15 @@ import type {
   InboxPage,
   ActivityStreamsObject,
   PageInfo,
+  InboxModifiedWebhook,
+  CommitHandlerWebhook,
 } from '../src/types/index.js'
 
 describe('Types', () => {
-  describe('WebhookRegistration', () => {
+  describe('InboxModifiedWebhook', () => {
     it('should define required topic and callback fields', () => {
-      const registration: WebhookRegistration = {
+      const registration: InboxModifiedWebhook = {
+        handler: 'InboxModified',
         topic: 'https://example.com/inbox/',
         callback: vi.fn(),
       }
@@ -24,9 +27,35 @@ describe('Types', () => {
     })
 
     it('should allow optional actor field', () => {
-      const registration: WebhookRegistration = {
+      const registration: InboxModifiedWebhook = {
+        handler: 'InboxModified',
         topic: 'https://example.com/inbox/',
         callback: vi.fn(),
+        actor: 'https://example.com/actor/#me',
+      }
+      expect(registration.actor).toBe('https://example.com/actor/#me')
+    })
+  })
+
+  describe('CommitHandlerWebhook', () => {
+    it('should define required topic, callback, and gitDir fields', () => {
+      const registration: CommitHandlerWebhook = {
+        handler: 'CommitHandler',
+        topic: 'https://example.com/.git/COMMIT_EDITMSG',
+        callback: vi.fn(),
+        gitDir: '/repos/myrepo',
+      }
+      expect(registration.topic).toBeDefined()
+      expect(typeof registration.callback).toBe('function')
+      expect(registration.gitDir).toBe('/repos/myrepo')
+    })
+
+    it('should allow optional actor field', () => {
+      const registration: CommitHandlerWebhook = {
+        handler: 'CommitHandler',
+        topic: 'https://example.com/.git/COMMIT_EDITMSG',
+        callback: vi.fn(),
+        gitDir: '/repos/myrepo',
         actor: 'https://example.com/actor/#me',
       }
       expect(registration.actor).toBe('https://example.com/actor/#me')

@@ -1,8 +1,29 @@
-export interface WebhookRegistration {
+export interface InboxModifiedWebhook {
+  handler: 'InboxModified'
   topic: string
   callback: WebhookHandler
   actor?: string
 }
+
+export interface CommitHandlerWebhook {
+  handler: 'CommitHandler'
+  topic: string
+  callback: WebhookHandler
+  gitDir: string
+  actor?: string
+}
+
+export interface UpdateWebhooksWebhook {
+  handler: 'UpdateWebhooks'
+  topic: string
+  callback: WebhookHandler
+  actor?: string
+}
+
+export type WebhookRegistration =
+  | InboxModifiedWebhook
+  | CommitHandlerWebhook
+  | UpdateWebhooksWebhook
 
 export interface SubscriptionInfo {
   id: string

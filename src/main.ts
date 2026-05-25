@@ -3,7 +3,7 @@ import { createSolidFetch } from './services/solidFetch.js'
 import { handleInboxModified } from './handlers/inboxModified.js'
 import { handleUpdateWebhooks } from './handlers/updateWebhooks.js'
 import { createApp, startServer, subscribeAll, unsubscribeAll } from './index.js'
-import type { SolidFetch, WebhookRegistration } from './types/index.js'
+import type { SolidFetch, WebhookRegistration, UpdateWebhooksWebhook } from './types/index.js'
 
 const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, fetch: SolidFetch, context: any) => void | Promise<void>> = {
   InboxModified: async (event, fetch, ctx) => {
@@ -63,21 +63,41 @@ const validRegistrations: WebhookRegistration[] = []
         status: 'failed',
         error: `Unknown handler: ${w.handler}`,
       })
-    } else {
+    } else if (w.handler === 'InboxModified') {
       validRegistrations.push({
+        handler: 'InboxModified' as const,
         topic: w.topic,
         callback: async (event, fetch) => {
-          await handlers[w.handler](event, fetch, app.context)
+          await handlers.InboxModified(event, fetch, app.context)
         },
         actor: w.actor,
+      })
+    } else if (w.handler === 'UpdateWebhooks') {
+      validRegistrations.push({
+        handler: 'UpdateWebhooks' as const,
+        topic: w.topic,
+        callback: async (event, fetch) => {
+          await handlers.UpdateWebhooks(event, fetch, app.context)
+        },
+        actor: w.actor,
+      })
+    } else {
+      console.error(`Skipping subscription to ${w.topic}: Handler '${w.handler}' not fully implemented`)
+      failedSubscriptions.push({
+        id: '',
+        receiveFrom: '',
+        topic: w.topic,
+        status: 'failed',
+        error: `Handler not implemented: ${w.handler}`,
       })
     }
   }
 
   // Also subscribe to the config URL itself so changes to it trigger re-parsing
-  const configRegistration: WebhookRegistration = {
+  const configRegistration: UpdateWebhooksWebhook = {
+    handler: 'UpdateWebhooks',
     topic: config.webhookConfigUrl,
-    callback: async (event, fetch) => {
+    callback: async (event: import('./types/index.js').WebhookEvent, fetch: SolidFetch) => {
       await handlers.UpdateWebhooks(event, fetch, app.context)
     },
   }
