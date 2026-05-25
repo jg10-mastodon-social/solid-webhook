@@ -20,19 +20,18 @@ describe('CommitHandler', () => {
     mockExec.mockClear().mockResolvedValue({ stdout: '', stderr: '' })
   })
 
-  const createMockFetch = (response: Partial<Response> & { body?: string }) => {
+  const createMockFetch = (body: string) => {
     return vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       statusText: 'OK',
-      ...response,
-      text: vi.fn().mockResolvedValue(response.body || ''),
+      text: vi.fn().mockResolvedValue(body),
     }) as unknown as (url: string | URL | Request, init?: RequestInit) => Promise<Response>
   }
 
   describe('handleCommitHandler', () => {
     it('should fetch commit message from event.topic', async () => {
-      const mockFetch = createMockFetch({ body: 'Initial commit' })
+      const mockFetch = createMockFetch('Initial commit')
 
       await handleCommitHandler(
         {
@@ -49,7 +48,7 @@ describe('CommitHandler', () => {
     })
 
     it('should return true for Remove events without fetching', async () => {
-      const mockFetch = createMockFetch({ body: 'Initial commit' })
+      const mockFetch = createMockFetch('Initial commit')
 
       const result = await handleCommitHandler(
         {
@@ -67,7 +66,7 @@ describe('CommitHandler', () => {
     })
 
     it('should return false when no gitDir is provided', async () => {
-      const mockFetch = createMockFetch({ body: 'Initial commit' })
+      const mockFetch = createMockFetch('Initial commit')
 
       const result = await handleCommitHandler(
         {
@@ -85,7 +84,7 @@ describe('CommitHandler', () => {
     })
 
     it('should execute git add and git commit commands', async () => {
-      const mockFetch = createMockFetch({ body: 'Initial commit' })
+      const mockFetch = createMockFetch('Initial commit')
 
       const result = await handleCommitHandler(
         {
@@ -109,7 +108,7 @@ describe('CommitHandler', () => {
     it('should return false when git commit fails', async () => {
       mockExec.mockRejectedValueOnce(new Error('Git failed'))
 
-      const mockFetch = createMockFetch({ body: 'Initial commit' })
+      const mockFetch = createMockFetch('Initial commit')
 
       const result = await handleCommitHandler(
         {

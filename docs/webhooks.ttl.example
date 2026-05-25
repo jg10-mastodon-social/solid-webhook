@@ -10,3 +10,9 @@
   :topic <https://jg10.solidcommunity.net/outbox/>;
   :handler :OutboxModified;
   :actor <https://jg10.solidcommunity.net/actor/#me> .
+
+# Commit changes to a git repository when COMMIT_EDITMSG changes
+:commitWebhook a :WebHook;
+  :topic <https://pod.example.com/.git/COMMIT_EDITMSG>;
+  :handler :CommitHandler;
+  :gitDir "/path/to/local/repo" .
