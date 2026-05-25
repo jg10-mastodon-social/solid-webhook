@@ -5,7 +5,23 @@ export async function handleCommitHandler(
   fetch: SolidFetch,
   context?: { gitDir?: string }
 ): Promise<boolean> {
-  console.log('CommitHandler called with event:', event)
-  console.log('gitDir from context:', context?.gitDir)
+  if (event.type === 'Remove') {
+    return true
+  }
+
+  if (!context?.gitDir) {
+    console.error('No gitDir provided')
+    return false
+  }
+
+  const commitMsgUrl = event.topic
+  console.log(`Fetching commit message from: ${commitMsgUrl}`)
+
+  const response = await fetch(commitMsgUrl)
+  if (!response.ok) {
+    console.error(`Failed to fetch commit message: ${response.status}`)
+    return false
+  }
+
   return true
 }
