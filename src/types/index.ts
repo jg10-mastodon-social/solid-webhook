@@ -55,6 +55,36 @@ export interface Config {
   webhookConfigUrl: string
   handlerBaseUrl: string
   adminWebId: string
+  skolemizeBase?: string
+}
+
+export interface InboxCollection {
+  id: string
+  type: string
+  first?: string
+  last?: string
+  totalItems?: number
+}
+
+export interface InboxPage {
+  id: string
+  type: string
+  partOf: string
+  items?: string[]
+  orderedItems?: unknown[]
+}
+
+export interface ActivityStreamsObject {
+  type: string | string[]
+  id?: string
+  actor?: string | string[]
+  object?: unknown
+  [key: string]: unknown
+}
+
+export interface PageInfo {
+  itemCount: number
+  isFull: boolean
 }
 
 declare module 'koa' {

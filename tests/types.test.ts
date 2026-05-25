@@ -6,6 +6,10 @@ import type {
   SolidFetch,
   Config,
   WebhookHandler,
+  InboxCollection,
+  InboxPage,
+  ActivityStreamsObject,
+  PageInfo,
 } from '../src/types/index.js'
 
 describe('Types', () => {
@@ -103,6 +107,106 @@ describe('Types', () => {
       expect(config.webhookConfigUrl).toBeDefined()
       expect(config.handlerBaseUrl).toBeDefined()
       expect(config.adminWebId).toBeDefined()
+    })
+
+    it('should allow optional skolemizeBase field', () => {
+      const config: Config = {
+        webId: 'https://example.com/profile/card#me',
+        issuer: 'https://example.com',
+        baseUrl: 'http://localhost:8080',
+        webhookEndpoint: '/webhook',
+        port: 8080,
+        sendToUrl: 'https://example.com/webhook/',
+        whitelistedIssuers: ['https://solidcommunity.net'],
+        webhookConfigUrl: 'https://example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://example.com/handlers#',
+        adminWebId: 'https://example.com/profile/card#me',
+        skolemizeBase: 'https://example.com/.well-known/genid/',
+      }
+      expect(config.skolemizeBase).toBe('https://example.com/.well-known/genid/')
+    })
+  })
+
+  describe('InboxCollection', () => {
+    it('should define required id and type fields', () => {
+      const collection: InboxCollection = {
+        id: 'https://example.com/inbox/',
+        type: 'OrderedCollection',
+      }
+      expect(collection.id).toBeDefined()
+      expect(collection.type).toBe('OrderedCollection')
+    })
+
+    it('should allow optional first, last, and totalItems', () => {
+      const collection: InboxCollection = {
+        id: 'https://example.com/inbox/',
+        type: 'OrderedCollection',
+        first: 'https://example.com/inbox/pages/1234567890',
+        last: 'https://example.com/inbox/pages/1234500000',
+        totalItems: 1000,
+      }
+      expect(collection.first).toBeDefined()
+      expect(collection.last).toBeDefined()
+      expect(collection.totalItems).toBe(1000)
+    })
+  })
+
+  describe('InboxPage', () => {
+    it('should define required id, type, and partOf fields', () => {
+      const page: InboxPage = {
+        id: 'https://example.com/inbox/pages/1234567890',
+        type: 'OrderedCollectionPage',
+        partOf: 'https://example.com/inbox/',
+      }
+      expect(page.id).toBeDefined()
+      expect(page.type).toBe('OrderedCollectionPage')
+      expect(page.partOf).toBeDefined()
+    })
+
+    it('should allow optional items and orderedItems', () => {
+      const page: InboxPage = {
+        id: 'https://example.com/inbox/pages/1234567890',
+        type: 'OrderedCollectionPage',
+        partOf: 'https://example.com/inbox/',
+        items: ['https://example.com/activities/1', 'https://example.com/activities/2'],
+      }
+      expect(page.items).toHaveLength(2)
+    })
+  })
+
+  describe('ActivityStreamsObject', () => {
+    it('should allow flexible properties', () => {
+      const activity: ActivityStreamsObject = {
+        type: 'Create',
+        id: 'https://example.com/activities/1',
+        actor: 'https://example.com/actor/#me',
+        object: {
+          type: 'Note',
+          content: 'Hello world',
+        },
+      }
+      expect(activity.type).toBe('Create')
+      expect(activity.actor).toBe('https://example.com/actor/#me')
+      expect(activity.object).toBeDefined()
+    })
+
+    it('should support actor as array', () => {
+      const activity: ActivityStreamsObject = {
+        type: 'Create',
+        actor: ['https://example.com/actor/1', 'https://example.com/actor/2'],
+      }
+      expect(Array.isArray(activity.actor)).toBe(true)
+    })
+  })
+
+  describe('PageInfo', () => {
+    it('should define itemCount and isFull', () => {
+      const info: PageInfo = {
+        itemCount: 150,
+        isFull: false,
+      }
+      expect(info.itemCount).toBe(150)
+      expect(info.isFull).toBe(false)
     })
   })
 })
