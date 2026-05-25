@@ -1,4 +1,6 @@
 import type { WebhookEvent, SolidFetch } from '../types/index.js'
+import { derivePageUrl } from '../services/derivePageUrl.js'
+import { persistInboxItem } from '../services/persistInbox.js'
 
 export async function handleInboxModified(
   event: WebhookEvent,
@@ -27,8 +29,17 @@ export async function handleInboxModified(
     return false
   }
 
-  const activity = await activityResponse.json()
+  const activity = await activityResponse.json() as Record<string, unknown>
   console.log('Processing activity:', activity)
+
+  const inboxUrl = event.topic
+  let pageUrl: string
+  try {
+    pageUrl = await derivePageUrl(inboxUrl, fetch)
+    await persistInboxItem(activity, pageUrl, fetch)
+  } catch (error) {
+    console.error(`Failed to persist inbox item: ${error}`)
+  }
 
   const deleteResponse = await fetch(event.object, {
     method: 'DELETE',
