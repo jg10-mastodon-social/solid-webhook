@@ -191,5 +191,25 @@ describe('Config', () => {
 
       expect(webhooks).toHaveLength(2)
     })
+
+    it('should parse gitDir from webhook configuration', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :commitWebhook a :WebHook;
+          :topic <https://pod.example.com/.git/COMMIT_EDITMSG>;
+          :handler <https://example.com/handlers#CommitHandler>;
+          :gitDir "/repos/myrepo" .
+      `
+
+      const { parseWebhooksFromRDF } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+
+      expect(webhooks).toHaveLength(1)
+      expect(webhooks[0].gitDir).toBe('/repos/myrepo')
+      expect(webhooks[0].handler).toBe('CommitHandler')
+      expect(webhooks[0].topic).toBe('https://pod.example.com/.git/COMMIT_EDITMSG')
+    })
   })
 })

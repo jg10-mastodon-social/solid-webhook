@@ -5,6 +5,7 @@ export interface ParsedWebhook {
   topic: string
   handler: string
   actor?: string
+  gitDir?: string
 }
 
 export function loadConfig(): Config {
@@ -78,6 +79,7 @@ export async function parseWebhooksFromRDF(
         const topicPredicate = `${handlerBaseUrl}topic`
         const handlerPredicate = `${handlerBaseUrl}handler`
         const actorPredicate = `${handlerBaseUrl}actor`
+        const gitDirPredicate = `${handlerBaseUrl}gitDir`
         
         for (const quad of webhookQuads) {
           if (
@@ -88,6 +90,7 @@ export async function parseWebhooksFromRDF(
             const topicQuads = store.getQuads(webhookUri, topicPredicate, null, null)
             const handlerQuads = store.getQuads(webhookUri, handlerPredicate, null, null)
             const actorQuads = store.getQuads(webhookUri, actorPredicate, null, null)
+            const gitDirQuads = store.getQuads(webhookUri, gitDirPredicate, null, null)
 
             if (topicQuads.length > 0 && handlerQuads.length > 0) {
               const topic = topicQuads[0].object.value
@@ -95,8 +98,9 @@ export async function parseWebhooksFromRDF(
               const hashIndex = handlerUri.lastIndexOf('#')
               const handlerName = hashIndex !== -1 ? handlerUri.slice(hashIndex + 1) : handlerUri
               const actor = actorQuads.length > 0 ? actorQuads[0].object.value : undefined
+              const gitDir = gitDirQuads.length > 0 ? gitDirQuads[0].object.value : undefined
 
-              webhooks.push({ topic, handler: handlerName, actor })
+              webhooks.push({ topic, handler: handlerName, actor, gitDir })
             }
           }
         }
