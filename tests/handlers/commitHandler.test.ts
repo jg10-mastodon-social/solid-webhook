@@ -1,7 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { handleCommitHandler } from '../../src/handlers/commitHandler.js'
 
+const { mockExec } = vi.hoisted(() => {
+  return {
+    mockExec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+  }
+})
+
+vi.mock('child_process', () => ({
+  exec: mockExec,
+}))
+
+vi.mock('util', () => ({
+  promisify: (fn: any) => fn,
+}))
+
 describe('CommitHandler', () => {
+  beforeEach(() => {
+    mockExec.mockClear().mockResolvedValue({ stdout: '', stderr: '' })
+  })
+
   const createMockFetch = (response: Partial<Response> & { body?: string }) => {
     return vi.fn().mockResolvedValue({
       ok: true,
@@ -64,6 +82,47 @@ describe('CommitHandler', () => {
 
       expect(result).toBe(false)
       expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('should execute git add and git commit commands', async () => {
+      const mockFetch = createMockFetch({ body: 'Initial commit' })
+
+      const result = await handleCommitHandler(
+        {
+          type: 'Add',
+          topic: 'https://pod.example.com/.git/COMMIT_EDITMSG',
+          object: '',
+          raw: {},
+        },
+        mockFetch,
+        { gitDir: '/repos/myrepo' }
+      )
+
+      expect(result).toBe(true)
+      expect(mockExec).toHaveBeenCalledTimes(2)
+      expect(mockExec).toHaveBeenCalledWith(
+        'git --git-dir=/repos/myrepo add --all .',
+        expect.any(Object)
+      )
+    })
+
+    it('should return false when git commit fails', async () => {
+      mockExec.mockRejectedValueOnce(new Error('Git failed'))
+
+      const mockFetch = createMockFetch({ body: 'Initial commit' })
+
+      const result = await handleCommitHandler(
+        {
+          type: 'Add',
+          topic: 'https://pod.example.com/.git/COMMIT_EDITMSG',
+          object: '',
+          raw: {},
+        },
+        mockFetch,
+        { gitDir: '/repos/myrepo' }
+      )
+
+      expect(result).toBe(false)
     })
   })
 })
