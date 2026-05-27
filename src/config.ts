@@ -6,6 +6,7 @@ export interface ParsedWebhook {
   handler: string
   actor?: string
   gitDir?: string
+  indexUrl?: string
 }
 
 export function loadConfig(): Config {
@@ -80,6 +81,7 @@ export async function parseWebhooksFromRDF(
         const handlerPredicate = `${handlerBaseUrl}handler`
         const actorPredicate = `${handlerBaseUrl}actor`
         const gitDirPredicate = `${handlerBaseUrl}gitDir`
+        const indexUrlPredicate = `${handlerBaseUrl}indexUrl`
         
         for (const quad of webhookQuads) {
           if (
@@ -91,6 +93,7 @@ export async function parseWebhooksFromRDF(
             const handlerQuads = store.getQuads(webhookUri, handlerPredicate, null, null)
             const actorQuads = store.getQuads(webhookUri, actorPredicate, null, null)
             const gitDirQuads = store.getQuads(webhookUri, gitDirPredicate, null, null)
+            const indexUrlQuads = store.getQuads(webhookUri, indexUrlPredicate, null, null)
 
             if (topicQuads.length > 0 && handlerQuads.length > 0) {
               const topic = topicQuads[0].object.value
@@ -99,8 +102,9 @@ export async function parseWebhooksFromRDF(
               const handlerName = hashIndex !== -1 ? handlerUri.slice(hashIndex + 1) : handlerUri
               const actor = actorQuads.length > 0 ? actorQuads[0].object.value : undefined
               const gitDir = gitDirQuads.length > 0 ? gitDirQuads[0].object.value : undefined
+              const indexUrl = indexUrlQuads.length > 0 ? indexUrlQuads[0].object.value : undefined
 
-              webhooks.push({ topic, handler: handlerName, actor, gitDir })
+              webhooks.push({ topic, handler: handlerName, actor, gitDir, indexUrl })
             }
           }
         }
@@ -128,6 +132,15 @@ export function createWebhookRegistrations(
         handler: 'UpdateWebhooks' as const,
         topic: pw.topic,
         callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
+        actor: pw.actor,
+      }
+    }
+    if (pw.handler === 'ItemListIndexer') {
+      return {
+        handler: 'ItemListIndexer' as const,
+        topic: pw.topic,
+        callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
+        indexUrl: pw.indexUrl!,
         actor: pw.actor,
       }
     }

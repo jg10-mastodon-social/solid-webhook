@@ -211,5 +211,25 @@ describe('Config', () => {
       expect(webhooks[0].handler).toBe('CommitHandler')
       expect(webhooks[0].topic).toBe('https://pod.example.com/.git/COMMIT_EDITMSG')
     })
+
+    it('should parse indexUrl from ItemListIndexer webhook', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :indexWebhook a :WebHook;
+          :topic <https://pod.example.com/tasks/main/>;
+          :handler <https://example.com/handlers#ItemListIndexer>;
+          :indexUrl <https://pod.example.com/tasks/index.ttl> .
+      `
+
+      const { parseWebhooksFromRDF } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+
+      expect(webhooks).toHaveLength(1)
+      expect(webhooks[0].handler).toBe('ItemListIndexer')
+      expect(webhooks[0].topic).toBe('https://pod.example.com/tasks/main/')
+      expect((webhooks[0] as any).indexUrl).toBe('https://pod.example.com/tasks/index.ttl')
+    })
   })
 })
