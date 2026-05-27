@@ -20,10 +20,19 @@ export interface UpdateWebhooksWebhook {
   actor?: string
 }
 
+export interface ItemListIndexerWebhook {
+  handler: 'ItemListIndexer'
+  topic: string
+  callback: WebhookHandler
+  indexUrl: string
+  actor?: string
+}
+
 export type WebhookRegistration =
   | InboxModifiedWebhook
   | CommitHandlerWebhook
   | UpdateWebhooksWebhook
+  | ItemListIndexerWebhook
 
 export interface SubscriptionInfo {
   id: string
