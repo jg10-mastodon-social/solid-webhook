@@ -14,6 +14,10 @@ const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, 
     const { handleCommitHandler } = await import('./handlers/commitHandler.js')
     await handleCommitHandler(event, fetch, ctx)
   },
+  ItemListIndexer: async (event, fetch, ctx) => {
+    const { handleItemListIndexer } = await import('./handlers/itemListIndexer.js')
+    await handleItemListIndexer(event, fetch, ctx)
+  },
 }
 
 export async function main(): Promise<void> {
@@ -93,6 +97,16 @@ const validRegistrations: WebhookRegistration[] = []
           await handlers.CommitHandler(event, fetch, { ...app.context, gitDir: w.gitDir })
         },
         gitDir: w.gitDir!,
+        actor: w.actor,
+      })
+    } else if (w.handler === 'ItemListIndexer') {
+      validRegistrations.push({
+        handler: 'ItemListIndexer' as const,
+        topic: w.topic,
+        callback: async (event, fetch) => {
+          await handlers.ItemListIndexer(event, fetch, app.context)
+        },
+        indexUrl: w.indexUrl!,
         actor: w.actor,
       })
     } else {
