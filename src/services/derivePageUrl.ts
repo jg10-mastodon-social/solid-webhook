@@ -2,6 +2,7 @@ import type { SolidFetch, InboxCollection } from '../types/index.js'
 import { createPage } from './createPage.js'
 import { updateInboxFirst } from './updateInbox.js'
 import { getPageInfo, PAGE_SIZE_LIMIT } from './getPageInfo.js'
+import { discoverMetaResourceUrl } from './solidHelpers.js'
 
 function normalizeInboxUrl(inboxUrl: string): string {
   return inboxUrl.endsWith('/') ? inboxUrl : `${inboxUrl}/`
@@ -15,9 +16,16 @@ function generatePageUrl(inboxUrl: string): string {
 
 export async function getInboxCollection(
   inboxUrl: string,
-  fetch: SolidFetch
+  fetch: SolidFetch,
+  useDiscovery: boolean
 ): Promise<InboxCollection | null> {
-  const response = await fetch(inboxUrl, {
+  let urlToFetch = inboxUrl
+
+  if (useDiscovery) {
+    urlToFetch = await discoverMetaResourceUrl(inboxUrl, fetch)
+  }
+
+  const response = await fetch(urlToFetch, {
     method: 'GET',
     headers: {
       accept: 'application/ld+json, application/json',
@@ -40,12 +48,17 @@ export async function derivePageUrl(
   inboxUrl: string,
   fetch: SolidFetch
 ): Promise<string> {
+  const useDiscovery = inboxUrl.endsWith('/')
   const normalizedInbox = normalizeInboxUrl(inboxUrl)
 
   let firstPageUrl: string | null = null
 
   try {
-    const collection = await getInboxCollection(normalizedInbox, fetch)
+    const collection = await getInboxCollection(
+      useDiscovery ? normalizedInbox : inboxUrl,
+      fetch,
+      useDiscovery
+    )
     if (collection && collection.first) {
       firstPageUrl = collection.first
     }
