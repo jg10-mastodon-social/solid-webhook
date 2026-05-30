@@ -1,12 +1,24 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Context, Next } from 'koa'
+
+vi.mock('@solid/access-token-verifier', () => ({
+  default: {
+    createSolidTokenVerifier: () => async () => ({
+      webid: 'https://pod.example.com/profile/card#me',
+      client_id: 'https://pod.example.com/client#id',
+      iss: 'https://pod.example.com',
+    }),
+  },
+}))
 
 describe('SolidAuth Middleware', () => {
   let ctx: Partial<Context>
   let next: Next
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    consoleLogSpy = vi.spyOn(console, 'log').mockReturnValue(undefined)
     ctx = {
       headers: {},
       path: '/webhook',
@@ -58,4 +70,45 @@ describe('SolidAuth Middleware', () => {
       expect(typeof middleware).toBe('function')
     })
   })
+
+  describe('Token Verification Error Handling', () => {
+    it('should log time difference when iat claim timestamp check fails', async () => {
+      const { isIatTimestampError, logIatTimeDifference } = await import('../../src/middleware/solidAuth.js')
+
+      const error = new Error('JWTClaimValidationFailed: "iat" claim timestamp check failed')
+      expect(isIatTimestampError(error)).toBe(true)
+
+      const iatTimestamp = Math.floor(Date.now() / 1000) - 120
+      const token = createMockJwt({ alg: 'RS256' }, { iat: iatTimestamp })
+      logIatTimeDifference(`DPoP ${token}`)
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('iat')
+      )
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('seconds')
+      )
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('behind')
+      )
+    })
+
+    it('should correctly identify non-iat errors', async () => {
+      const { isIatTimestampError } = await import('../../src/middleware/solidAuth.js')
+
+      const error = new Error('some other error')
+      expect(isIatTimestampError(error)).toBe(false)
+    })
+  })
 })
+
+function createMockJwt(header: object, payload: object): string {
+  const base64UrlEncode = (obj: object) => {
+    const json = JSON.stringify(obj)
+    const base64 = Buffer.from(json).toString('base64')
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+  }
+  const encodedHeader = base64UrlEncode(header)
+  const encodedPayload = base64UrlEncode(payload)
+  return `${encodedHeader}.${encodedPayload}.signature`
+}
