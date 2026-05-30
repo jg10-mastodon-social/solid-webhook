@@ -136,11 +136,26 @@ export function createWebhookRegistrations(
       }
     }
     if (pw.handler === 'ItemListIndexer') {
+      if (!pw.indexUrl) {
+        throw new Error("ItemListIndexer webhook is missing required :indexUrl")
+      }
       return {
         handler: 'ItemListIndexer' as const,
         topic: pw.topic,
         callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
-        indexUrl: pw.indexUrl!,
+        indexUrl: pw.indexUrl,
+        actor: pw.actor,
+      }
+    }
+    if (pw.handler === 'CommitHandler') {
+      if (!pw.gitDir) {
+        throw new Error("CommitHandler webhook is missing required :gitDir")
+      }
+      return {
+        handler: 'CommitHandler' as const,
+        topic: pw.topic,
+        callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
+        gitDir: pw.gitDir,
         actor: pw.actor,
       }
     }

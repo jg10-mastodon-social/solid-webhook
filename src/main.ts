@@ -62,61 +62,66 @@ const validRegistrations: WebhookRegistration[] = []
   const failedSubscriptions: import('./types/index.js').TrackedSubscription[] = []
 
   for (const w of webhooks) {
-    if (!handlers[w.handler]) {
-      console.error(`Skipping subscription to ${w.topic}: Unknown handler '${w.handler}'`)
+    try {
+      if (!handlers[w.handler]) {
+        throw new Error(`Unknown handler '${w.handler}'`)
+      }
+      if (w.handler === 'InboxModified') {
+        validRegistrations.push({
+          handler: 'InboxModified' as const,
+          topic: w.topic,
+          callback: async (event, fetch) => {
+            await handlers.InboxModified(event, fetch, app.context)
+          },
+          actor: w.actor,
+        })
+      } else if (w.handler === 'UpdateWebhooks') {
+        validRegistrations.push({
+          handler: 'UpdateWebhooks' as const,
+          topic: w.topic,
+          callback: async (event, fetch) => {
+            await handlers.UpdateWebhooks(event, fetch, app.context)
+          },
+          actor: w.actor,
+        })
+      } else if (w.handler === 'CommitHandler') {
+        if (!w.gitDir) {
+          throw new Error("CommitHandler webhook is missing required :gitDir")
+        }
+        validRegistrations.push({
+          handler: 'CommitHandler' as const,
+          topic: w.topic,
+          callback: async (event, fetch) => {
+            await handlers.CommitHandler(event, fetch, { ...app.context, gitDir: w.gitDir })
+          },
+          gitDir: w.gitDir,
+          actor: w.actor,
+        })
+      } else if (w.handler === 'ItemListIndexer') {
+        if (!w.indexUrl) {
+          throw new Error("ItemListIndexer webhook is missing required :indexUrl")
+        }
+        validRegistrations.push({
+          handler: 'ItemListIndexer' as const,
+          topic: w.topic,
+          callback: async (event, fetch) => {
+            await handlers.ItemListIndexer(event, fetch, app.context)
+          },
+          indexUrl: w.indexUrl,
+          actor: w.actor,
+        })
+      } else {
+        throw new Error(`Handler '${w.handler}' not fully implemented`)
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error(`Skipping subscription to ${w.topic}: ${errorMsg}`)
       failedSubscriptions.push({
         id: '',
         receiveFrom: '',
         topic: w.topic,
         status: 'failed',
-        error: `Unknown handler: ${w.handler}`,
-      })
-    } else if (w.handler === 'InboxModified') {
-      validRegistrations.push({
-        handler: 'InboxModified' as const,
-        topic: w.topic,
-        callback: async (event, fetch) => {
-          await handlers.InboxModified(event, fetch, app.context)
-        },
-        actor: w.actor,
-      })
-    } else if (w.handler === 'UpdateWebhooks') {
-      validRegistrations.push({
-        handler: 'UpdateWebhooks' as const,
-        topic: w.topic,
-        callback: async (event, fetch) => {
-          await handlers.UpdateWebhooks(event, fetch, app.context)
-        },
-        actor: w.actor,
-      })
-    } else if (w.handler === 'CommitHandler') {
-      validRegistrations.push({
-        handler: 'CommitHandler' as const,
-        topic: w.topic,
-        callback: async (event, fetch) => {
-          await handlers.CommitHandler(event, fetch, { ...app.context, gitDir: w.gitDir })
-        },
-        gitDir: w.gitDir!,
-        actor: w.actor,
-      })
-    } else if (w.handler === 'ItemListIndexer') {
-      validRegistrations.push({
-        handler: 'ItemListIndexer' as const,
-        topic: w.topic,
-        callback: async (event, fetch) => {
-          await handlers.ItemListIndexer(event, fetch, app.context)
-        },
-        indexUrl: w.indexUrl!,
-        actor: w.actor,
-      })
-    } else {
-      console.error(`Skipping subscription to ${w.topic}: Handler '${w.handler}' not fully implemented`)
-      failedSubscriptions.push({
-        id: '',
-        receiveFrom: '',
-        topic: w.topic,
-        status: 'failed',
-        error: `Handler not implemented: ${w.handler}`,
+        error: errorMsg,
       })
     }
   }

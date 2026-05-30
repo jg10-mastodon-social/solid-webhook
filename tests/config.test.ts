@@ -231,5 +231,39 @@ describe('Config', () => {
       expect(webhooks[0].topic).toBe('https://pod.example.com/tasks/main/')
       expect((webhooks[0] as any).indexUrl).toBe('https://pod.example.com/tasks/index.ttl')
     })
+
+    it('should throw when ItemListIndexer is missing :indexUrl', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :indexWebhook a :WebHook;
+          :topic <https://pod.example.com/tasks/main/>;
+          :handler <https://example.com/handlers#ItemListIndexer> .
+      `
+
+      const { parseWebhooksFromRDF, createWebhookRegistrations } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+
+      expect(webhooks).toHaveLength(1)
+      expect(() => createWebhookRegistrations(webhooks, {})).toThrow('ItemListIndexer webhook is missing required :indexUrl')
+    })
+
+    it('should throw when CommitHandler is missing :gitDir', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :commitWebhook a :WebHook;
+          :topic <https://pod.example.com/.git/COMMIT_EDITMSG>;
+          :handler <https://example.com/handlers#CommitHandler> .
+      `
+
+      const { parseWebhooksFromRDF, createWebhookRegistrations } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+
+      expect(webhooks).toHaveLength(1)
+      expect(() => createWebhookRegistrations(webhooks, {})).toThrow('CommitHandler webhook is missing required :gitDir')
+    })
   })
 })
