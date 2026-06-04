@@ -13,20 +13,20 @@ export async function createApp(config: Config): Promise<Koa> {
 
   app.keys = ['solid-webhook-secret']
 
+  app.context.whitelistedIssuers = config.whitelistedIssuers || []
+
   const router = new Router()
 
   router.use(solidIdentity(config.webId, config.baseUrl).routes())
 
   const solidAuthMiddleware = createSolidAuthMiddleware(
     config.sendToUrl,
-    'POST',
-    config.whitelistedIssuers
+    'POST'
   )
 
   const solidAuthMiddlewareForGet = createSolidAuthMiddleware(
     config.baseUrl + '/subscriptions',
-    'GET',
-    config.whitelistedIssuers
+    'GET'
   )
 
   const adminAuthMiddleware = createAdminAuthMiddleware(config.adminWebId)
@@ -47,6 +47,8 @@ export async function createApp(config: Config): Promise<Koa> {
           topic: matchingReg.topic,
           raw: body,
         }, ctx.app.context.fetch as SolidFetch, ctx.app.context)
+      } else if (registrations && registrations.length > 0) {
+        console.error(`[Webhook] Error: No handler found for object ${body.object}`)
       }
     }
 

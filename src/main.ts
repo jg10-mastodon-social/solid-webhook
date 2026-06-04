@@ -39,26 +39,42 @@ export async function main(): Promise<void> {
   console.log('Loading webhook configuration...')
   let webhooks: import('./config.js').ParsedWebhook[] = []
 
-  try {
-    const rdfResponse = await fetchFn(config.webhookConfigUrl, {
-      headers: { accept: 'text/turtle,application/x-turtle' },
-    })
+  if (config.webhookConfigUrl && config.handlerBaseUrl) {
+    try {
+      const rdfResponse = await fetchFn(config.webhookConfigUrl, {
+        headers: { accept: 'text/turtle,application/x-x-turtle' },
+      })
 
-    if (!rdfResponse.ok) {
-      throw new Error(`Failed to fetch webhook config: ${rdfResponse.status} ${rdfResponse.statusText}`)
+      if (rdfResponse.ok) {
+        const rdfContent = await rdfResponse.text()
+        console.log(`Loaded ${rdfContent.length} bytes of RDF configuration`)
+        webhooks = await parseWebhooksFromRDF(rdfContent, config.handlerBaseUrl)
+        console.log(`Found ${webhooks.length} webhook registrations`)
+      } else {
+        console.error(`Failed to fetch webhook config: ${rdfResponse.status} ${rdfResponse.statusText}`)
+      }
+    } catch (error) {
+      console.error(`Webhook configuration unavailable: ${error}`)
     }
-
-    const rdfContent = await rdfResponse.text()
-    console.log(`Loaded ${rdfContent.length} bytes of RDF configuration`)
-
-    webhooks = await parseWebhooksFromRDF(rdfContent, config.handlerBaseUrl)
-    console.log(`Found ${webhooks.length} webhook registrations`)
-  } catch (error) {
-    console.error(`Webhook configuration unavailable: ${error}`)
-    console.error('Server will continue without webhook subscriptions')
   }
 
-const validRegistrations: WebhookRegistration[] = []
+  if (!process.env.WHITELISTED_ISSUERS && webhooks.length > 0) {
+    const origins = new Set<string>()
+    for (const webhook of webhooks) {
+      try {
+        const url = new URL(webhook.topic)
+        origins.add(url.origin)
+      } catch {
+        // Skip invalid URLs
+      }
+    }
+    if (origins.size > 0) {
+      app.context.whitelistedIssuers = Array.from(origins)
+      console.log(`Derived whitelistedIssuers from webhook topics: ${app.context.whitelistedIssuers.join(', ')}`)
+    }
+  }
+
+  const validRegistrations: WebhookRegistration[] = []
   const failedSubscriptions: import('./types/index.js').TrackedSubscription[] = []
 
   for (const w of webhooks) {

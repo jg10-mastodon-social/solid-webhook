@@ -41,11 +41,14 @@ describe('Config', () => {
       expect(config.adminWebId).toBe('https://pod.example.com/profile/card#me')
     })
 
-    it('should throw if WHITELISTED_ISSUERS is missing', async () => {
+    it('should return empty whitelistedIssuers when WHITELISTED_ISSUERS is missing and no webhooks provided', async () => {
       process.env.BASE_URL = 'http://localhost:8081'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
 
       const { loadConfig } = await import('../src/config.js')
-      expect(() => loadConfig()).toThrow('WHITELISTED_ISSUERS is required')
+      const config = loadConfig()
+      expect(config.whitelistedIssuers).toEqual([])
     })
 
     it('should throw if WEBHOOK_CONFIG_URL is missing', async () => {

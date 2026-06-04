@@ -22,9 +22,6 @@ export function loadConfig(): Config {
   const webhookConfigUrl = process.env.WEBHOOK_CONFIG_URL
   const handlerBaseUrl = process.env.HANDLER_BASE_URL
 
-  if (!whitelistedIssuersStr) {
-    throw new Error('WHITELISTED_ISSUERS is required')
-  }
   if (!webhookConfigUrl) {
     throw new Error('WEBHOOK_CONFIG_URL is required')
   }
@@ -37,7 +34,9 @@ export function loadConfig(): Config {
   const sendToUrl = process.env.SEND_TO_URL || `${baseUrl}${webhookEndpoint}`
   const adminWebId = process.env.ADMIN_WEBID || ''
 
-  const whitelistedIssuers = whitelistedIssuersStr.split(',').map((s) => s.trim())
+  const whitelistedIssuers = whitelistedIssuersStr
+    ? whitelistedIssuersStr.split(',').map((s) => s.trim())
+    : []
 
   return {
     webId,

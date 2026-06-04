@@ -71,6 +71,63 @@ describe('SolidAuth Middleware', () => {
     })
   })
 
+  describe('Issuer Whitelisting', () => {
+    it('should reject when whitelistedIssuers is empty (default closed)', async () => {
+      ctx.headers = { authorization: 'DPoP sometoken', dpop: 'somedpop' }
+      ;(ctx as any).app = { context: { whitelistedIssuers: [] } }
+
+      const { createSolidAuthMiddleware } = await import('../../src/middleware/solidAuth.js')
+      const middleware = createSolidAuthMiddleware('https://pod.example.com/webhook/', 'POST')
+
+      await middleware(ctx as Context, next)
+
+      expect(ctx.status).toBe(403)
+      expect(ctx.body).toBe('Issuer not allowed')
+      expect(next).not.toHaveBeenCalled()
+    })
+
+    it('should allow issuer in whitelistedIssuers from app.context', async () => {
+      ctx.headers = { authorization: 'DPoP sometoken', dpop: 'somedpop' }
+      ;(ctx as any).app = { context: { whitelistedIssuers: ['https://pod.example.com'] } }
+
+      const { createSolidAuthMiddleware } = await import('../../src/middleware/solidAuth.js')
+      const middleware = createSolidAuthMiddleware('https://pod.example.com/webhook/', 'POST')
+
+      await middleware(ctx as Context, next)
+
+      expect(ctx.status).toBe(200)
+      expect(next).toHaveBeenCalled()
+    })
+
+    it('should reject issuer not in whitelistedIssuers from app.context', async () => {
+      ctx.headers = { authorization: 'DPoP sometoken', dpop: 'somedpop' }
+      ;(ctx as any).app = { context: { whitelistedIssuers: ['https://other.example.com'] } }
+
+      const { createSolidAuthMiddleware } = await import('../../src/middleware/solidAuth.js')
+      const middleware = createSolidAuthMiddleware('https://pod.example.com/webhook/', 'POST')
+
+      await middleware(ctx as Context, next)
+
+      expect(ctx.status).toBe(403)
+      expect(ctx.body).toBe('Issuer not allowed')
+      expect(next).not.toHaveBeenCalled()
+    })
+
+    it('should reject when app.context.whitelistedIssuers is undefined', async () => {
+      ctx.headers = { authorization: 'DPoP sometoken', dpop: 'somedpop' }
+      ;(ctx as any).app = { context: {} }
+
+      const { createSolidAuthMiddleware } = await import('../../src/middleware/solidAuth.js')
+      const middleware = createSolidAuthMiddleware('https://pod.example.com/webhook/', 'POST')
+
+      await middleware(ctx as Context, next)
+
+      expect(ctx.status).toBe(403)
+      expect(ctx.body).toBe('Issuer not allowed')
+      expect(next).not.toHaveBeenCalled()
+    })
+  })
+
   describe('Token Verification Error Handling', () => {
     it('should log time difference when iat claim timestamp check fails', async () => {
       const { isIatTimestampError, logIatTimeDifference } = await import('../../src/middleware/solidAuth.js')

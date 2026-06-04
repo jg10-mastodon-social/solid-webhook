@@ -34,8 +34,7 @@ export function logIatTimeDifference(authHeader: string | undefined): void {
 
 export function createSolidAuthMiddleware(
   expectedUrl: string,
-  expectedMethod: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD' = 'POST',
-  whitelistedIssuers: string[] = []
+  expectedMethod: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD' = 'POST'
 ): (ctx: Context, next: Next) => Promise<void> {
   return async (ctx: Context, next: Next): Promise<void> => {
     const authHeader = ctx.headers.authorization
@@ -72,7 +71,8 @@ export function createSolidAuthMiddleware(
       ctx.state.webId = payload.webid
       ctx.state.clientId = payload.client_id
 
-      if (whitelistedIssuers.length > 0 && !whitelistedIssuers.includes(payload.iss)) {
+      const whitelistedIssuers = (ctx as any).app?.context?.whitelistedIssuers
+      if (!whitelistedIssuers || whitelistedIssuers.length === 0 || !whitelistedIssuers.includes(payload.iss)) {
         console.log(`[solidAuth] DENIED: Issuer not allowed: ${payload.iss}`)
         ctx.status = 403
         ctx.body = 'Issuer not allowed'

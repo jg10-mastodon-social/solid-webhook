@@ -66,6 +66,7 @@ export interface HandlerContext {
   sendToUrl?: string
   handlerBaseUrl?: string
   handlers?: Record<string, WebhookHandler>
+  whitelistedIssuers?: string[]
 }
 
 export type WebhookHandler = (
@@ -81,7 +82,7 @@ export interface Config {
   webhookEndpoint: string
   port: number
   sendToUrl: string
-  whitelistedIssuers: string[]
+  whitelistedIssuers?: string[]
   webhookConfigUrl: string
   handlerBaseUrl: string
   adminWebId: string
@@ -127,5 +128,6 @@ declare module 'koa' {
     subscriptions?: TrackedSubscription[]
     sendToUrl?: string
     handlerBaseUrl?: string
+    whitelistedIssuers?: string[]
   }
 }
