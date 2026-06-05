@@ -372,5 +372,140 @@ describe('Koa Server', () => {
       expect(response.status).toBeGreaterThanOrEqual(200)
       expect(response.status).toBeLessThan(500)
     })
+
+    it('should invoke handler when object matches registration topic', async () => {
+      const { createApp, startServer } = await import('../src/index.js')
+      const callback = vi.fn()
+      const app = await createApp({
+        webId: 'https://pod.example.com/profile/card#me',
+        issuer: 'https://pod.example.com',
+        webhookEndpoint: '/webhook',
+        port: 8093,
+        sendToUrl: 'https://pod.example.com/webhook/',
+        whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8093',
+        adminWebId: 'https://pod.example.com/profile/card#me',
+      })
+
+      app.context.registrations = [{
+        topic: 'https://pod.example.com/inbox/',
+        handler: 'InboxModified',
+        callback,
+        actor: 'https://pod.example.com/actor',
+      }]
+
+      server = await startServer(app, 8093)
+
+      const response = await fetch('http://localhost:8093/webhook', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          dpop: 'test-dpop-header',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'Add', object: 'https://pod.example.com/inbox/abc' }),
+      })
+
+      expect(response.status).toBe(200)
+      expect(callback).toHaveBeenCalledTimes(1)
+      const callArgs = callback.mock.calls[0]
+      expect(callArgs[0]).toMatchObject({
+        type: 'Add',
+        object: 'https://pod.example.com/inbox/abc',
+        topic: 'https://pod.example.com/inbox/',
+      })
+    })
+
+    it('should log error when no handler matches object', async () => {
+      const { createApp, startServer } = await import('../src/index.js')
+      const callback = vi.fn()
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const app = await createApp({
+        webId: 'https://pod.example.com/profile/card#me',
+        issuer: 'https://pod.example.com',
+        webhookEndpoint: '/webhook',
+        port: 8094,
+        sendToUrl: 'https://pod.example.com/webhook/',
+        whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8094',
+        adminWebId: 'https://pod.example.com/profile/card#me',
+      })
+
+      app.context.registrations = [{
+        topic: 'https://pod.example.com/inbox/',
+        handler: 'InboxModified',
+        callback,
+        actor: 'https://pod.example.com/actor',
+      }]
+
+      server = await startServer(app, 8094)
+
+      const response = await fetch('http://localhost:8094/webhook', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          dpop: 'test-dpop-header',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'Add', object: 'https://other.example.com/inbox/abc' }),
+      })
+
+      expect(response.status).toBe(200)
+      expect(callback).not.toHaveBeenCalled()
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('No handler found for object')
+      )
+      consoleErrorSpy.mockRestore()
+    })
+
+    it('should correctly parse JSON body', async () => {
+      const { createApp, startServer } = await import('../src/index.js')
+      const callback = vi.fn()
+      const app = await createApp({
+        webId: 'https://pod.example.com/profile/card#me',
+        issuer: 'https://pod.example.com',
+        webhookEndpoint: '/webhook',
+        port: 8095,
+        sendToUrl: 'https://pod.example.com/webhook/',
+        whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8095',
+        adminWebId: 'https://pod.example.com/profile/card#me',
+      })
+
+      app.context.registrations = [{
+        topic: 'https://pod.example.com/inbox/',
+        handler: 'InboxModified',
+        callback,
+        actor: 'https://pod.example.com/actor',
+      }]
+
+      server = await startServer(app, 8095)
+
+      const webhookBody = { type: 'Remove', object: 'https://pod.example.com/inbox/item123' }
+      const response = await fetch('http://localhost:8095/webhook', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          dpop: 'test-dpop-header',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(webhookBody),
+      })
+
+      expect(response.status).toBe(200)
+      expect(callback).toHaveBeenCalledTimes(1)
+      const callArgs = callback.mock.calls[0]
+      expect(callArgs[0]).toMatchObject({
+        type: 'Remove',
+        object: 'https://pod.example.com/inbox/item123',
+        raw: webhookBody,
+      })
+    })
   })
 })

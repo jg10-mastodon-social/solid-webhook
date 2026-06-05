@@ -1,6 +1,7 @@
 import Koa from 'koa'
 import Router from '@koa/router'
 import cors from '@koa/cors'
+import bodyParser from 'koa-bodyparser'
 import { solidIdentity } from '@soid/koa'
 import { createSolidAuthMiddleware } from './middleware/solidAuth.js'
 import { createAdminAuthMiddleware } from './middleware/adminAuth.js'
@@ -10,6 +11,19 @@ import type { SolidFetch } from './types/index.js'
 
 export async function createApp(config: Config): Promise<Koa> {
   const app = new Koa()
+
+  app.use(bodyParser({
+    enableTypes: ['json'],
+    extendTypes: {
+      json: [
+        'application/ld+json',
+        'application/json',
+        'application/activity+json',
+      ],
+    },
+    encoding: 'utf-8',
+    jsonLimit: '1mb',
+  }))
 
   app.keys = ['solid-webhook-secret']
 
@@ -48,7 +62,11 @@ export async function createApp(config: Config): Promise<Koa> {
           raw: body,
         }, ctx.app.context.fetch as SolidFetch, ctx.app.context)
       } else if (registrations && registrations.length > 0) {
-        console.error(`[Webhook] Error: No handler found for object ${body.object}`)
+        if (body.object === undefined) {
+          console.error(`[Webhook] Error: object is undefined.\n> ${ctx.request.rawBody}`)
+        } else {
+          console.error(`[Webhook] Error: No handler found for object ${body.object}`)
+        }
       }
     }
 
