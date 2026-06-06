@@ -13,6 +13,10 @@ export async function handleInboxModified(
     console.log('[InboxModified] Remove event, skipping')
     return false
   }
+  if (event.type === 'Update') {
+    console.log('[ItemListIndexer] Update event, skipping')
+    return false
+  }
 
   const activityResponse = await fetch(event.object, {
     method: 'GET',

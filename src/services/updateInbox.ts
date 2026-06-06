@@ -14,16 +14,17 @@ export async function updateInboxFirst(
     targetUrl = inboxUrl
   }
 
-  const patch = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
-INSERT DATA {
-  <${inboxUrl}> as:first <${newFirstUrl}>.
-}.
-
-DELETE DATA {
-  <${inboxUrl}> as:first ?oldFirst.
+  const escapedInboxUrl = inboxUrl
+  const escapedNewFirstUrl = newFirstUrl
+  const patch = `PREFIX as: <https://www.w3.org/ns/activitystreams#>
+DELETE {
+  <${escapedInboxUrl}> as:first ?oldFirst.
 } WHERE {
-  <${inboxUrl}> as:first ?oldFirst.
-}.
+  <${escapedInboxUrl}> as:first ?oldFirst.
+};
+INSERT DATA {
+  <${escapedInboxUrl}> as:first <${escapedNewFirstUrl}>.
+}
 `
 
   const response = await fetch(targetUrl, {
@@ -39,3 +40,4 @@ DELETE DATA {
     throw new Error(`Failed to update inbox first: ${response.status} ${text}`)
   }
 }
+

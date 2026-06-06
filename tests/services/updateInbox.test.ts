@@ -65,9 +65,9 @@ describe('updateInboxFirst', () => {
 
     const callArgs = mockFetch.mock.calls[0]
     const body = callArgs[1].body
-    expect(body).toContain('INSERT DATA')
-    expect(body).toContain('DELETE DATA')
+    expect(body).toContain('DELETE')
     expect(body).toContain('WHERE')
+    expect(body).toContain('INSERT DATA')
   })
 
   describe('for container URLs', () => {
@@ -133,6 +133,40 @@ describe('updateInboxFirst', () => {
         'https://example.com/inbox',
         expect.objectContaining({ method: 'PATCH' })
       )
+    })
+  })
+
+  describe('for URLs with encoded characters', () => {
+    it('should handle URLs with percent signs', async () => {
+      mockFetch.mockResolvedValue(
+        new Response(null, { status: 200 })
+      )
+
+      const inboxUrl = 'https://example.com/inbox/Icon%20Water/'
+      const newFirstUrl = 'https://example.com/inbox/Icon%20Water/inbox/pages/1234567890'
+
+      await updateInboxFirst(inboxUrl, newFirstUrl, mockFetch)
+
+      const callArgs = mockFetch.mock.calls[0]
+      const body = callArgs[1].body as string
+
+      expect(body).toContain('Icon%20Water')
+    })
+
+    it('should handle newFirstUrl with percent signs', async () => {
+      mockFetch.mockResolvedValue(
+        new Response(null, { status: 200 })
+      )
+
+      const inboxUrl = 'https://example.com/inbox/'
+      const newFirstUrl = 'https://example.com/inbox/pages/Icon%20Water/1234567890'
+
+      await updateInboxFirst(inboxUrl, newFirstUrl, mockFetch)
+
+      const callArgs = mockFetch.mock.calls[0]
+      const body = callArgs[1].body as string
+
+      expect(body).toContain('Icon%20Water')
     })
   })
 })
