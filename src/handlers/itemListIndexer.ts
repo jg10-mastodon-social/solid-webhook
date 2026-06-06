@@ -16,7 +16,10 @@ export async function handleItemListIndexer(
   fetch: SolidFetch,
   context?: HandlerContext
 ): Promise<boolean> {
+  console.log(`[ItemListIndexer] ${event.type} event for ${event.object}`)
+
   if (event.type === 'Remove') {
+    console.log('[ItemListIndexer] Remove event, skipping')
     return false
   }
 
@@ -24,7 +27,8 @@ export async function handleItemListIndexer(
     (r): r is ItemListIndexerWebhook => r.handler === 'ItemListIndexer'
   )
   if (!registration) {
-    console.error('No ItemListIndexer registration found')
+    console.error('[ItemListIndexer] Error: No ItemListIndexer registration found')
+    console.log('[ItemListIndexer] completed: false')
     return false
   }
 
@@ -38,7 +42,8 @@ export async function handleItemListIndexer(
   })
 
   if (!response.ok) {
-    console.error(`Failed to fetch task: ${response.status}`)
+    console.error(`[ItemListIndexer] Error: Failed to fetch task: ${response.status}`)
+    console.log('[ItemListIndexer] completed: false')
     return false
   }
 
@@ -46,6 +51,7 @@ export async function handleItemListIndexer(
   const task = await parseTask(turtle, taskUrl)
 
   if (!task) {
+    console.log('[ItemListIndexer] completed: false (no valid task found)')
     return false
   }
 
@@ -60,11 +66,13 @@ export async function handleItemListIndexer(
   })
 
   if (!patchResponse.ok) {
-    console.error(`Failed to update index: ${patchResponse.status}`)
+    console.error(`[ItemListIndexer] Error: Failed to update index: ${patchResponse.status}`)
+    console.log('[ItemListIndexer] completed: false')
     return false
   }
 
-  console.log(`Indexed task: ${task.name}`)
+  console.log(`[ItemListIndexer] Indexed task: ${task.name}`)
+  console.log('[ItemListIndexer] completed: true')
   return true
 }
 
@@ -79,7 +87,7 @@ async function parseTask(turtle: string, baseUrl: string): Promise<ParsedTask | 
 
     parser.parse(turtle, (error, quad) => {
       if (error) {
-        console.error('RDF parse error:', error)
+        console.error('[ItemListIndexer] Error: RDF parse error:', error)
         resolve(null)
         return
       }
@@ -102,8 +110,10 @@ async function parseTask(turtle: string, baseUrl: string): Promise<ParsedTask | 
           }
         }
         if (isAction && name && hasPotentialActionStatus) {
+          console.log(`[ItemListIndexer] Parsed task: ${name}`)
           resolve({ name, taskUrl: baseUrl })
         } else {
+          console.log('[ItemListIndexer] Parsed task: invalid (missing required properties)')
           resolve(null)
         }
       }

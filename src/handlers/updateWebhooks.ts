@@ -15,7 +15,12 @@ export async function handleUpdateWebhooks(
   fetch: SolidFetch,
   context: KoaDefaultContext
 ): Promise<void> {
-  if (event.type !== 'Update') return
+  console.log(`[UpdateWebhooks] ${event.type} event for ${event.object}`)
+
+  if (event.type !== 'Update') {
+    console.log('[UpdateWebhooks] Non-Update event, skipping')
+    return
+  }
 
   const subscriptions = context.subscriptions || []
   const registrations = context.registrations || []
@@ -27,12 +32,14 @@ export async function handleUpdateWebhooks(
     headers: { accept: 'text/turtle,application/x-turtle' },
   })
   if (!rdfResponse.ok) {
-    console.error(`Failed to fetch webhook config: ${rdfResponse.status}`)
+    console.error(`[UpdateWebhooks] Error: Failed to fetch webhook config: ${rdfResponse.status}`)
+    console.log('[UpdateWebhooks] completed')
     return
   }
 
   const rdfContent = await rdfResponse.text()
   const parsedWebhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+  console.log(`[UpdateWebhooks] Parsed ${parsedWebhooks.length} webhooks`)
 
   for (const webhook of parsedWebhooks) {
     const exists = subscriptions.some((sub: any) => sub.topic === webhook.topic)
@@ -47,6 +54,7 @@ export async function handleUpdateWebhooks(
         status: 'failed',
         error: `Unknown handler: ${webhook.handler}`,
       })
+      console.error(`[UpdateWebhooks] Error: Unknown handler: ${webhook.handler}`)
       continue
     }
 
@@ -58,6 +66,7 @@ export async function handleUpdateWebhooks(
         callback: async (evt: WebhookEvent, fet: SolidFetch) => handler(evt, fet, context),
         actor: webhook.actor,
       })
+      console.log(`[UpdateWebhooks] Subscribed: ${webhook.topic}`)
     } catch (error) {
       subscriptions.push({
         id: '',
@@ -66,6 +75,8 @@ export async function handleUpdateWebhooks(
         status: 'failed',
         error: error instanceof Error ? error.message : 'Unknown error',
       })
+      console.error(`[UpdateWebhooks] Error: Failed to subscribe ${webhook.topic}: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
+  console.log('[UpdateWebhooks] completed')
 }

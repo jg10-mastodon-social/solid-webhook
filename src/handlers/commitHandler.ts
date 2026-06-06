@@ -11,43 +11,49 @@ export async function handleCommitHandler(
   fetch: SolidFetch,
   context?: { gitDir?: string }
 ): Promise<boolean> {
+  console.log(`[CommitHandler] ${event.type} event for ${event.object}`)
+
   if (event.type === 'Remove') {
+    console.log('[CommitHandler] Remove event, skipping')
     return true
   }
 
   if (!context?.gitDir) {
-    console.error('No gitDir provided')
+    console.error('[CommitHandler] Error: No gitDir provided')
     return false
   }
 
   const commitMsgUrl = event.topic
-  console.log(`Fetching commit message from: ${commitMsgUrl}`)
 
-  const response = await fetch(commitMsgUrl)
-  if (!response.ok) {
-    console.error(`Failed to fetch commit message: ${response.status}`)
-    return false
-  }
-
-  const commitMsg = await response.text()
-  const gitDir = context.gitDir
-
-  const tempFile = join('/tmp', `commit-msg-${Date.now()}.txt`)
+  let commitSuccess = false
   try {
-    await writeFile(tempFile, commitMsg, 'utf-8')
-    await execAsync(`git --git-dir=${gitDir} add --all .`, { cwd: gitDir })
-    await execAsync(`git --git-dir=${gitDir} commit -F "${tempFile}" --cleanup=strip`, { cwd: gitDir })
-    console.log(`Committed changes in: ${gitDir}`)
-  } catch (error) {
-    console.error(`Git commit failed: ${error}`)
-    return false
-  } finally {
-    try {
-      await unlink(tempFile)
-    } catch {
-      // ignore cleanup error
+    const response = await fetch(commitMsgUrl)
+    if (!response.ok) {
+      console.error(`[CommitHandler] Error: Failed to fetch commit message: ${response.status}`)
+      return false
     }
+
+    const commitMsg = await response.text()
+    const gitDir = context.gitDir
+
+    const tempFile = join('/tmp', `commit-msg-${Date.now()}.txt`)
+    try {
+      await writeFile(tempFile, commitMsg, 'utf-8')
+      await execAsync(`git --git-dir=${gitDir} add --all .`, { cwd: gitDir })
+      await execAsync(`git --git-dir=${gitDir} commit -F "${tempFile}" --cleanup=strip`, { cwd: gitDir })
+      console.log(`[CommitHandler] Committed changes in: ${gitDir}`)
+      commitSuccess = true
+    } finally {
+      try {
+        await unlink(tempFile)
+      } catch {
+        // ignore cleanup error
+      }
+    }
+  } catch (error) {
+    console.error(`[CommitHandler] Error: Git commit failed: ${error}`)
   }
 
-  return true
+  console.log(`[CommitHandler] completed: ${commitSuccess}`)
+  return commitSuccess
 }
