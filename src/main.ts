@@ -31,10 +31,10 @@ export async function main(): Promise<void> {
   console.log(`Handler base: ${config.handlerBaseUrl}`)
 
   const app = await createApp(config)
-  const server = await startServer(app, config.port)
-  console.log(`Server accepting requests on port ${config.port}`)
-
   const fetchFn = await createSolidFetch(config.webId, config.issuer)
+  app.context.fetch = fetchFn
+
+  const server = await startServer(app, config.port)
 
   console.log('Loading webhook configuration...')
   let webhooks: import('./config.js').ParsedWebhook[] = []

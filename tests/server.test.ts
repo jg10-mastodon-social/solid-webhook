@@ -418,6 +418,61 @@ describe('Koa Server', () => {
       })
     })
 
+    it('should pass fetch from app.context to actual handler', async () => {
+      const { createApp, startServer } = await import('../src/index.js')
+      const { handleItemListIndexer } = await import('../src/handlers/itemListIndexer.js')
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => `<https://pod.example.com/tasks/123> a <https://schema.org/Action> ;
+          <https://schema.org/name> "Test Task" ;
+          <https://schema.org/actionStatus> <https://schema.org/PotentialActionStatus> .`,
+      })
+
+      const app = await createApp({
+        webId: 'https://pod.example.com/profile/card#me',
+        issuer: 'https://pod.example.com',
+        webhookEndpoint: '/webhook',
+        port: 8096,
+        sendToUrl: 'https://pod.example.com/webhook/',
+        whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8096',
+        adminWebId: 'https://pod.example.com/profile/card#me',
+      })
+
+      app.context.fetch = mockFetch
+      app.context.registrations = [{
+        topic: 'https://pod.example.com/pod/tasks/main/',
+        handler: 'ItemListIndexer',
+        callback: async (event, fetch, context) => {
+          await handleItemListIndexer(event, fetch, context)
+        },
+        indexUrl: 'https://pod.example.com/tasks/index.ttl',
+        actor: 'https://pod.example.com/actor',
+      }]
+
+      server = await startServer(app, 8096)
+
+      const response = await fetch('http://localhost:8096/webhook', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          dpop: 'test-dpop-header',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'Add',
+          object: 'https://pod.example.com/pod/tasks/main/3273780338324163',
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      expect(mockFetch).toHaveBeenCalled()
+    })
+
     it('should log error when no handler matches object', async () => {
       const { createApp, startServer } = await import('../src/index.js')
       const callback = vi.fn()
