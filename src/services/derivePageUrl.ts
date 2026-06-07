@@ -1,34 +1,22 @@
+import { Parser, Store } from 'n3'
 import type { SolidFetch, InboxCollection } from '../types/index.js'
 import { createPage } from './createPage.js'
 import { updateInboxFirst } from './updateInbox.js'
-import { getPageInfo, PAGE_SIZE_LIMIT } from './getPageInfo.js'
-import { discoverMetaResourceUrl } from './solidHelpers.js'
-
-function normalizeInboxUrl(inboxUrl: string): string {
-  return inboxUrl.endsWith('/') ? inboxUrl : `${inboxUrl}/`
-}
+import { getPageInfo } from './getPageInfo.js'
 
 function generatePageUrl(inboxUrl: string): string {
-  const normalized = normalizeInboxUrl(inboxUrl)
   const timestamp = Date.now()
-  return `${normalized}pages/${timestamp}`
+  return `${inboxUrl}pages/${timestamp}`
 }
 
 export async function getInboxCollection(
   inboxUrl: string,
   fetch: SolidFetch,
-  useDiscovery: boolean
 ): Promise<InboxCollection | null> {
-  let urlToFetch = inboxUrl
-
-  if (useDiscovery) {
-    urlToFetch = await discoverMetaResourceUrl(inboxUrl, fetch)
-  }
-
-  const response = await fetch(urlToFetch, {
+  const response = await fetch(inboxUrl, {
     method: 'GET',
     headers: {
-      accept: 'application/ld+json, application/json',
+      accept: 'text/turtle,application/x-turtle',
     },
   })
 
@@ -39,25 +27,44 @@ export async function getInboxCollection(
     throw new Error(`Failed to fetch inbox ${inboxUrl}: ${response.status}`)
   }
 
-  const body = await response.text()
-  const data = JSON.parse(body) as InboxCollection
-  return data
+  const text = await response.text()
+  const parser = new Parser({ baseIRI: inboxUrl })
+  const store = new Store()
+  const quads = parser.parse(text)
+  if (quads) {
+    store.addQuads(quads)
+  }
+
+  const firstQuads = store.getQuads(
+    inboxUrl,
+    'https://www.w3.org/ns/activitystreams#first',
+    null,
+    null
+  )
+
+  if (firstQuads.length === 0) {
+    return null
+  }
+
+  return {
+    id: inboxUrl,
+    type: 'OrderedCollection',
+    first: firstQuads[0].object.value,
+  }
 }
 
 export async function derivePageUrl(
   inboxUrl: string,
   fetch: SolidFetch
 ): Promise<string> {
-  const useDiscovery = inboxUrl.endsWith('/')
-  const normalizedInbox = normalizeInboxUrl(inboxUrl)
+  if (!inboxUrl.endsWith('/')) throw new Error('Inbox url should end with /')
 
   let firstPageUrl: string | null = null
 
   try {
     const collection = await getInboxCollection(
-      useDiscovery ? normalizedInbox : inboxUrl,
-      fetch,
-      useDiscovery
+      inboxUrl,
+      fetch
     )
     if (collection && collection.first) {
       firstPageUrl = collection.first
@@ -77,10 +84,10 @@ export async function derivePageUrl(
     }
   }
 
-  const newPageUrl = generatePageUrl(normalizedInbox)
+  const newPageUrl = generatePageUrl(inboxUrl)
 
   try {
-    await createPage(newPageUrl, normalizedInbox, fetch)
+    await createPage(newPageUrl, inboxUrl, fetch)
   } catch (error) {
     if (error instanceof Error && error.message.includes('Already exists')) {
       return newPageUrl
@@ -89,7 +96,7 @@ export async function derivePageUrl(
   }
 
   try {
-    await updateInboxFirst(normalizedInbox, newPageUrl, fetch)
+    await updateInboxFirst(inboxUrl, newPageUrl, fetch)
   } catch (error) {
     console.warn(`Could not update inbox first link: ${error}`)
   }

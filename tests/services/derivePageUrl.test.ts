@@ -3,7 +3,6 @@ import { derivePageUrl, getInboxCollection } from '../../src/services/derivePage
 import { createPage } from '../../src/services/createPage.js'
 import { updateInboxFirst } from '../../src/services/updateInbox.js'
 import { getPageInfo, PAGE_SIZE_LIMIT } from '../../src/services/getPageInfo.js'
-import { discoverMetaResourceUrl } from '../../src/services/solidHelpers.js'
 
 const mockFetch = vi.fn()
 
@@ -20,129 +19,134 @@ vi.mock('../../src/services/getPageInfo.js', () => ({
   PAGE_SIZE_LIMIT: 200,
 }))
 
-vi.mock('../../src/services/solidHelpers.js', () => ({
-  discoverMetaResourceUrl: vi.fn(),
-}))
-
 describe('derivePageUrl', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(createPage).mockResolvedValue(undefined)
     vi.mocked(updateInboxFirst).mockResolvedValue(undefined)
-    vi.mocked(discoverMetaResourceUrl).mockResolvedValue('https://example.com/inbox/.meta')
   })
 
-  describe('for container URLs', () => {
-    it('should discover meta resource URL first', async () => {
+  describe('getInboxCollection', () => {
+    it('should return collection with first URL when as:first exists', async () => {
+      const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
+<https://example.com/inbox/> a as:OrderedCollection;
+  as:first <https://example.com/inbox/pages/1234567890>.`
+
       mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({ id: 'https://example.com/inbox/', type: 'OrderedCollection' }), {
+        new Response(turtleBody, {
           status: 200,
-          headers: { 'content-type': 'application/ld+json' },
+          headers: { 'content-type': 'text/turtle' },
         })
       )
 
-      await derivePageUrl('https://example.com/inbox/', mockFetch)
+      const result = await getInboxCollection('https://example.com/inbox/', mockFetch)
 
-      expect(discoverMetaResourceUrl).toHaveBeenCalledWith(
-        'https://example.com/inbox/',
-        mockFetch
-      )
+      expect(result).not.toBeNull()
+      expect(result?.first).toBe('https://example.com/inbox/pages/1234567890')
     })
 
-    it('should get inbox collection from meta resource', async () => {
+    it('should return null when inbox has no as:first', async () => {
+      const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
+<https://example.com/inbox/> a as:OrderedCollection.`
+
       mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({ id: 'https://example.com/inbox/', type: 'OrderedCollection' }), {
+        new Response(turtleBody, {
           status: 200,
-          headers: { 'content-type': 'application/ld+json' },
+          headers: { 'content-type': 'text/turtle' },
         })
       )
 
-      await derivePageUrl('https://example.com/inbox/', mockFetch)
+      const result = await getInboxCollection('https://example.com/inbox/', mockFetch)
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://example.com/inbox/.meta',
-        expect.objectContaining({ method: 'GET' })
-      )
+      expect(result).toBeNull()
     })
-  })
 
-  describe('for non-container URLs', () => {
-    it('should use direct URL without discovery', async () => {
+    it('should throw on non-404 fetch error', async () => {
       mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({ id: 'https://example.com/inbox', type: 'OrderedCollection' }), {
-          status: 200,
-          headers: { 'content-type': 'application/ld+json' },
-        })
+        new Response('Server error', { status: 500 })
       )
 
-      await derivePageUrl('https://example.com/inbox', mockFetch)
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://example.com/inbox',
-        expect.objectContaining({ method: 'GET' })
-      )
+      await expect(
+        getInboxCollection('https://example.com/inbox/', mockFetch)
+      ).rejects.toThrow('Failed to fetch inbox')
     })
-  })
 
-  describe('when inbox has no first page', () => {
-    it('should create a new page and update inbox first', async () => {
+    it('should return null on 404', async () => {
       mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({ id: 'https://example.com/inbox/', type: 'OrderedCollection' }), {
-          status: 200,
-          headers: { 'content-type': 'application/ld+json' },
-        })
+        new Response(null, { status: 404 })
       )
 
-      const result = await derivePageUrl('https://example.com/inbox/', mockFetch)
+      const result = await getInboxCollection('https://example.com/inbox/', mockFetch)
 
-      expect(result).toMatch(/https:\/\/example\.com\/inbox\/pages\/\d+/)
-      expect(createPage).toHaveBeenCalled()
-      expect(updateInboxFirst).toHaveBeenCalled()
+      expect(result).toBeNull()
     })
   })
 
-  describe('when first page exists and is not full', () => {
-    it('should return the existing first page URL', async () => {
-      const existingPage = 'https://example.com/inbox/pages/1234567890'
-      mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({
-          id: 'https://example.com/inbox/',
-          type: 'OrderedCollection',
-          first: existingPage,
-        }), {
-          status: 200,
-          headers: { 'content-type': 'application/ld+json' },
-        })
-      )
+  describe('derivePageUrl', () => {
+    describe('when inbox has no first page', () => {
+      it('should create a new page and update inbox first', async () => {
+        const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
+<https://example.com/inbox/> a as:OrderedCollection.`
 
-      vi.mocked(getPageInfo).mockResolvedValueOnce({ itemCount: 2, isFull: false })
+        mockFetch.mockResolvedValue(
+          new Response(turtleBody, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
 
-      const result = await derivePageUrl('https://example.com/inbox/', mockFetch)
+        const result = await derivePageUrl('https://example.com/inbox/', mockFetch)
 
-      expect(result).toBe(existingPage)
-      expect(createPage).not.toHaveBeenCalled()
+        expect(result).toMatch(/https:\/\/example\.com\/inbox\/pages\/\d+/)
+        expect(createPage).toHaveBeenCalled()
+        expect(updateInboxFirst).toHaveBeenCalled()
+      })
     })
-  })
 
-  describe('when first page exists and is full', () => {
-    it('should create a new page', async () => {
-      mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({
-          id: 'https://example.com/inbox/',
-          type: 'OrderedCollection',
-          first: 'https://example.com/inbox/pages/1234567890',
-        }), {
-          status: 200,
-          headers: { 'content-type': 'application/ld+json' },
-        })
-      )
+    describe('when first page exists and is not full', () => {
+      it('should return the existing first page URL', async () => {
+        const existingPage = 'https://example.com/inbox/pages/1234567890'
+        const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
+<https://example.com/inbox/> a as:OrderedCollection;
+  as:first <${existingPage}>.`
 
-      vi.mocked(getPageInfo).mockResolvedValueOnce({ itemCount: 200, isFull: true })
+        mockFetch.mockResolvedValue(
+          new Response(turtleBody, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
 
-      const result = await derivePageUrl('https://example.com/inbox/', mockFetch)
+        vi.mocked(getPageInfo).mockResolvedValueOnce({ itemCount: 2, isFull: false })
 
-      expect(result).toMatch(/https:\/\/example\.com\/inbox\/pages\/\d+/)
-      expect(createPage).toHaveBeenCalled()
+        const result = await derivePageUrl('https://example.com/inbox/', mockFetch)
+
+        expect(result).toBe(existingPage)
+        expect(createPage).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('when first page exists and is full', () => {
+      it('should create a new page', async () => {
+        const existingPage = 'https://example.com/inbox/pages/1234567890'
+        const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
+<https://example.com/inbox/> a as:OrderedCollection;
+  as:first <${existingPage}>.`
+
+        mockFetch.mockResolvedValue(
+          new Response(turtleBody, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
+
+        vi.mocked(getPageInfo).mockResolvedValueOnce({ itemCount: 200, isFull: true })
+
+        const result = await derivePageUrl('https://example.com/inbox/', mockFetch)
+
+        expect(result).toMatch(/https:\/\/example\.com\/inbox\/pages\/\d+/)
+        expect(createPage).toHaveBeenCalled()
+      })
     })
   })
 })
