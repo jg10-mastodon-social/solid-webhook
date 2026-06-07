@@ -30,8 +30,9 @@ describe('persistInboxItem', () => {
       actor: 'https://example.com/actor/#me',
     }
     const pageUrl = 'https://example.com/inbox/pages/1234567890'
+    const skolemizeBase = 'https://example.com/.well-known/genid/'
 
-    await persistInboxItem(activity, pageUrl, mockFetch)
+    await persistInboxItem(activity, pageUrl, mockFetch, { skolemizeBase })
 
     expect(mockFetch).toHaveBeenCalledWith(
       pageUrl,
@@ -51,9 +52,10 @@ describe('persistInboxItem', () => {
 
     const activity = { type: 'Create', id: 'https://example.com/activities/1' }
     const pageUrl = 'https://example.com/inbox/pages/1234567890'
+    const skolemizeBase = 'https://example.com/.well-known/genid/'
 
     await expect(
-      persistInboxItem(activity, pageUrl, mockFetch)
+      persistInboxItem(activity, pageUrl, mockFetch, { skolemizeBase })
     ).rejects.toThrow(/Failed to persist inbox item/)
   })
 
@@ -81,8 +83,9 @@ describe('persistInboxItem', () => {
       id: 'https://example.com/activities/123',
     }
     const pageUrl = 'https://example.com/inbox/pages/1234567890'
+    const skolemizeBase = 'https://example.com/.well-known/genid/'
 
-    await persistInboxItem(activity, pageUrl, mockFetch)
+    await persistInboxItem(activity, pageUrl, mockFetch, { skolemizeBase })
 
     expect(buildInsertDeletePatch).toHaveBeenCalledWith(
       expect.any(String),
@@ -100,12 +103,13 @@ describe('persistInboxItem', () => {
       type: 'Create',
     }
     const pageUrl = 'https://example.com/inbox/pages/1234567890'
+    const skolemizeBase = 'https://example.com/.well-known/genid/'
 
-    await persistInboxItem(activity, pageUrl, mockFetch)
+    await persistInboxItem(activity, pageUrl, mockFetch, { skolemizeBase })
 
     expect(buildInsertDeletePatch).toHaveBeenCalledWith(
       expect.any(String),
-      expect.stringContaining('https://pod.example/.well-known/genid/'),
+      expect.stringContaining('https://example.com/.well-known/genid/'),
       pageUrl
     )
   })

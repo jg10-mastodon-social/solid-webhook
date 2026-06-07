@@ -7,9 +7,9 @@ export async function persistInboxItem(
   activity: Record<string, unknown>,
   pageUrl: string,
   fetch: SolidFetch,
-  options?: { skolemizeBase?: string }
+  options: { skolemizeBase: string }
 ): Promise<void> {
-  const skolemizeBase = options?.skolemizeBase || 'https://pod.example/.well-known/genid/'
+  const { skolemizeBase } = options
 
   const activityWithContext = {
     ...activity,

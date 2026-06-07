@@ -46,7 +46,9 @@ export async function handleInboxModified(
   try {
     pageUrl = await derivePageUrl(inboxUrl, fetch)
     if (pageUrl) {
-      await persistInboxItem(activity, pageUrl, fetch)
+      const url = new URL(pageUrl)
+      const skolemizeBase = `${url.origin}/.well-known/genid/`
+      await persistInboxItem(activity, pageUrl, fetch, { skolemizeBase })
     }
   } catch (error) {
     console.error(`[InboxModified] Error: Failed to persist inbox item: ${error}`)
