@@ -19,7 +19,12 @@ export async function createSolidFetch(
     throw new Error('Issuer origin must match webId origin')
   }
 
-  return await getAuthenticatedFetch(webId, issuer)
+  const loggedFetch: SolidFetch = async (url, init) => {
+    const fetchFn = await getAuthenticatedFetch(webId, issuer)
+    return await fetchFn(url, init)
+  }
+
+  return loggedFetch
 }
 
 export function createSolidFetchSync(

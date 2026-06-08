@@ -8,8 +8,10 @@ const mockFetch = vi.fn().mockResolvedValue(
   })
 )
 
+const mockGetAuthenticatedFetch = vi.fn().mockResolvedValue(mockFetch)
+
 vi.mock('@soid/koa', () => ({
-  getAuthenticatedFetch: vi.fn().mockResolvedValue(mockFetch),
+  getAuthenticatedFetch: mockGetAuthenticatedFetch,
 }))
 
 describe('SolidFetch Service', () => {
@@ -57,6 +59,25 @@ describe('SolidFetch Service', () => {
       const response = await fetch('https://pod.example.com/inbox/')
       expect(response.ok).toBe(true)
       expect(mockFetch).toHaveBeenCalled()
+    })
+  })
+
+  describe('per-request token creation', () => {
+    beforeEach(() => {
+      mockGetAuthenticatedFetch.mockClear()
+    })
+
+    it('should create new token for each request', async () => {
+      const { createSolidFetch } = await import('../../src/services/solidFetch.js')
+      const fetch = await createSolidFetch(
+        'https://pod.example.com/profile/card#me',
+        'https://pod.example.com'
+      )
+
+      await fetch('https://pod.example.com/resource1')
+      await fetch('https://pod.example.com/resource2')
+
+      expect(mockGetAuthenticatedFetch).toHaveBeenCalledTimes(2)
     })
   })
 })
