@@ -3,6 +3,7 @@ import { createSolidFetch } from './services/solidFetch.js'
 import { handleInboxModified } from './handlers/inboxModified.js'
 import { handleUpdateWebhooks } from './handlers/updateWebhooks.js'
 import { createApp, startServer, subscribeAll, unsubscribeAll } from './index.js'
+import { processExistingInboxItems } from './services/processInbox.js'
 import type { SolidFetch, WebhookRegistration, UpdateWebhooksWebhook } from './types/index.js'
 
 const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, fetch: SolidFetch, context: any) => void | Promise<void>> = {
@@ -162,6 +163,18 @@ export async function main(): Promise<void> {
   app.context.subscriptions = [...failedSubscriptions, ...subscriptions]
   const activeCount = subscriptions.filter(s => s.status === 'active').length
   console.log(`Subscribed to ${activeCount}/${subscriptions.length + failedSubscriptions.length} webhook channels`)
+
+  console.log('Processing existing inbox items...')
+  const inboxRegistrations = validRegistrations.filter((reg) => reg.handler === 'InboxModified')
+  for (const reg of inboxRegistrations) {
+    try {
+      console.log(`Processing existing items from ${reg.topic}...`)
+      const { processed, skipped } = await processExistingInboxItems(reg.topic, fetchFn, handlers.InboxModified)
+      console.log(`Processed ${processed} existing items from ${reg.topic} (${skipped} skipped)`)
+    } catch (error) {
+      console.error(`Failed to process existing inbox items for ${reg.topic}: ${error}`)
+    }
+  }
 
   console.log(`Solid Webhook server running on port ${config.port}`)
 

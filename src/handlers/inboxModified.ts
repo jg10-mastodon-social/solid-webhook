@@ -21,7 +21,7 @@ export async function handleInboxModified(
   const activityResponse = await fetch(event.object, {
     method: 'GET',
     headers: {
-      accept: 'application/activity+json, application/ld+json, application/json',
+      accept: 'application/activity+json, application/ld+json, application/json, application/octet-stream',
     },
   })
 
