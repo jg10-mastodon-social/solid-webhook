@@ -7,14 +7,14 @@ export async function handleInboxModified(
   fetch: SolidFetch,
   _context?: unknown
 ): Promise<boolean> {
-  console.log(`[InboxModified] ${event.type} event for ${event.object}`)
+  console.log(`[InboxModified] ${event.type} event for ${event.object} on topic ${event.topic}`)
 
   if (event.type === 'Remove') {
     console.log('[InboxModified] Remove event, skipping')
     return false
   }
   if (event.type === 'Update') {
-    console.log('[ItemListIndexer] Update event, skipping')
+    console.log('[InboxModified] Update event, skipping')
     return false
   }
 
@@ -49,6 +49,7 @@ export async function handleInboxModified(
       const url = new URL(pageUrl)
       const skolemizeBase = `${url.origin}/.well-known/genid/`
       await persistInboxItem(activity, pageUrl, fetch, { skolemizeBase })
+      console.log(`[InboxModified] Persisted activity to inbox`)
     }
   } catch (error) {
     console.error(`[InboxModified] Error: Failed to persist inbox item: ${error}`)
@@ -60,6 +61,8 @@ export async function handleInboxModified(
 
   if (!deleteResponse.ok) {
     console.error(`[InboxModified] Error: Failed to delete activity: ${deleteResponse.status}`)
+  } else {
+    console.log(`[InboxModified] Deleted activity from ${event.object}`)
   }
 
   console.log('[InboxModified] completed: true')

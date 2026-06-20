@@ -88,6 +88,7 @@ export async function derivePageUrl(
 
   try {
     await createPage(newPageUrl, inboxUrl, fetch)
+    console.log(`[InboxModified] Created new page ${newPageUrl}`)
   } catch (error) {
     if (error instanceof Error && error.message.includes('Already exists')) {
       return newPageUrl
@@ -97,6 +98,7 @@ export async function derivePageUrl(
 
   try {
     await updateInboxFirst(inboxUrl, newPageUrl, fetch)
+    console.log(`[InboxModified] Updated inbox first link to ${newPageUrl}`)
   } catch (error) {
     console.warn(`Could not update inbox first link: ${error}`)
   }
