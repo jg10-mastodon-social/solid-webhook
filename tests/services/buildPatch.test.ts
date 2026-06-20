@@ -11,6 +11,7 @@ describe('buildPatch', () => {
       expect(result).toContain('solid:InsertDeletePatch')
       expect(result).toContain(itemId)
       expect(result).toContain('as:items')
+      expect(result).toContain(`<${pageUrl}> as:items <${itemId}>`)
     })
 
     it('should include the correct prefixes', () => {
@@ -26,12 +27,12 @@ describe('buildPatch', () => {
       expect(result).toContain(itemId)
     })
 
-    it('should create well-formed patch body without requiring pageUrl', () => {
+    it('should use pageUrl as subject of as:items triple', () => {
       const itemId = 'https://example.com/activities/123'
-      const result = buildInsertDeletePatch('<item> <prop> "value" .', itemId, 'https://example.com/page')
-      expect(result).toContain('solid:inserts')
-      expect(result).toContain('as:items')
-      expect(result).toMatch(/_\:patch a solid:InsertDeletePatch/)
+      const pageUrl = 'https://example.com/page'
+      const result = buildInsertDeletePatch('<item> <prop> "value" .', itemId, pageUrl)
+      expect(result).toContain(`<${pageUrl}> as:items <${itemId}>`)
+      expect(result).not.toContain(`<${itemId}> as:items <${itemId}>`)
     })
 
     it('should embed item turtle in the patch', () => {

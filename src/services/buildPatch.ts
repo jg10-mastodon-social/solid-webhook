@@ -11,7 +11,7 @@ export function buildInsertDeletePatch(
   const patch = `${INSERT_DELETE_PATCH_PREFIX}
       _:patch a solid:InsertDeletePatch;
       solid:inserts {
-			      <${itemId}> as:items <${itemId}>.
+			      <${pageUrl}> as:items <${itemId}>.
        ${itemTurtle}
      }.
 `
