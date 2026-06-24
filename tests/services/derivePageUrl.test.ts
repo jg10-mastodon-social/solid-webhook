@@ -3,6 +3,7 @@ import { derivePageUrl, getInboxCollection } from '../../src/services/derivePage
 import { createPage } from '../../src/services/createPage.js'
 import { updateInboxFirst } from '../../src/services/updateInbox.js'
 import { getPageInfo, PAGE_SIZE_LIMIT } from '../../src/services/getPageInfo.js'
+import { updatePageNext } from '../../src/services/updatePageNext.js'
 
 const mockFetch = vi.fn()
 
@@ -19,11 +20,16 @@ vi.mock('../../src/services/getPageInfo.js', () => ({
   PAGE_SIZE_LIMIT: 200,
 }))
 
+vi.mock('../../src/services/updatePageNext.ts', () => ({
+  updatePageNext: vi.fn(),
+}))
+
 describe('derivePageUrl', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(createPage).mockResolvedValue(undefined)
     vi.mocked(updateInboxFirst).mockResolvedValue(undefined)
+    vi.mocked(updatePageNext).mockResolvedValue(undefined)
   })
 
   describe('getInboxCollection', () => {
@@ -101,6 +107,43 @@ describe('derivePageUrl', () => {
         expect(createPage).toHaveBeenCalled()
         expect(updateInboxFirst).toHaveBeenCalled()
       })
+
+      it('should create page without prev link when no first page exists', async () => {
+        const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
+<https://example.com/inbox/> a as:OrderedCollection.`
+
+        mockFetch.mockResolvedValue(
+          new Response(turtleBody, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
+
+        await derivePageUrl('https://example.com/inbox/', mockFetch)
+
+        expect(createPage).toHaveBeenCalledWith(
+          expect.any(String),
+          'https://example.com/inbox/',
+          mockFetch,
+          undefined
+        )
+      })
+
+      it('should not call updatePageNext when no first page exists', async () => {
+        const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
+<https://example.com/inbox/> a as:OrderedCollection.`
+
+        mockFetch.mockResolvedValue(
+          new Response(turtleBody, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
+
+        await derivePageUrl('https://example.com/inbox/', mockFetch)
+
+        expect(updatePageNext).not.toHaveBeenCalled()
+      })
     })
 
     describe('when first page exists and is not full', () => {
@@ -127,7 +170,7 @@ describe('derivePageUrl', () => {
     })
 
     describe('when first page exists and is full', () => {
-      it('should create a new page', async () => {
+      it('should create a new page with prev link to existing page', async () => {
         const existingPage = 'https://example.com/inbox/pages/1234567890'
         const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
 <https://example.com/inbox/> a as:OrderedCollection;
@@ -145,7 +188,36 @@ describe('derivePageUrl', () => {
         const result = await derivePageUrl('https://example.com/inbox/', mockFetch)
 
         expect(result).toMatch(/https:\/\/example\.com\/inbox\/pages\/\d+/)
-        expect(createPage).toHaveBeenCalled()
+        expect(createPage).toHaveBeenCalledWith(
+          expect.any(String),
+          'https://example.com/inbox/',
+          mockFetch,
+          existingPage
+        )
+      })
+
+      it('should add as:next link on the existing page', async () => {
+        const existingPage = 'https://example.com/inbox/pages/1234567890'
+        const turtleBody = `@prefix as: <https://www.w3.org/ns/activitystreams#>.
+<https://example.com/inbox/> a as:OrderedCollection;
+  as:first <${existingPage}>.`
+
+        mockFetch.mockResolvedValue(
+          new Response(turtleBody, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
+
+        vi.mocked(getPageInfo).mockResolvedValueOnce({ itemCount: 200, isFull: true })
+
+        const result = await derivePageUrl('https://example.com/inbox/', mockFetch)
+
+        expect(updatePageNext).toHaveBeenCalledWith(
+          existingPage,
+          result,
+          mockFetch
+        )
       })
     })
   })

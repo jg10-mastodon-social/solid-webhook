@@ -101,6 +101,8 @@ export interface InboxPage {
   id: string
   type: string
   partOf: string
+  next?: string
+  prev?: string
   items?: string[]
   orderedItems?: unknown[]
 }

@@ -3,6 +3,7 @@ import type { SolidFetch, InboxCollection } from '../types/index.js'
 import { createPage } from './createPage.js'
 import { updateInboxFirst } from './updateInbox.js'
 import { getPageInfo } from './getPageInfo.js'
+import { updatePageNext } from './updatePageNext.js'
 
 function generatePageUrl(inboxUrl: string): string {
   const timestamp = Date.now()
@@ -87,13 +88,22 @@ export async function derivePageUrl(
   const newPageUrl = generatePageUrl(inboxUrl)
 
   try {
-    await createPage(newPageUrl, inboxUrl, fetch)
+    await createPage(newPageUrl, inboxUrl, fetch, firstPageUrl ?? undefined)
     console.log(`[InboxModified] Created new page ${newPageUrl}`)
   } catch (error) {
     if (error instanceof Error && error.message.includes('Already exists')) {
       return newPageUrl
     }
     throw error
+  }
+
+  if (firstPageUrl) {
+    try {
+      await updatePageNext(firstPageUrl, newPageUrl, fetch)
+      console.log(`[InboxModified] Added next link on ${firstPageUrl} to ${newPageUrl}`)
+    } catch (error) {
+      console.warn(`Could not update page next link: ${error}`)
+    }
   }
 
   try {

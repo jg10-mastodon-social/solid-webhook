@@ -63,4 +63,35 @@ describe('createPage', () => {
     const body = JSON.parse(callArgs[1].body)
     expect(body['@context']).toBe('https://www.w3.org/ns/activitystreams')
   })
+
+  it('should include prev link when prevPageUrl is provided', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(null, { status: 201 })
+    )
+
+    const pageUrl = 'https://example.com/inbox/pages/1234567891'
+    const inboxUrl = 'https://example.com/inbox/'
+    const prevPageUrl = 'https://example.com/inbox/pages/1234567890'
+
+    await createPage(pageUrl, inboxUrl, mockFetch, prevPageUrl)
+
+    const callArgs = mockFetch.mock.calls[0]
+    const body = JSON.parse(callArgs[1].body)
+    expect(body.prev).toBe(prevPageUrl)
+  })
+
+  it('should not include prev link when prevPageUrl is not provided', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(null, { status: 201 })
+    )
+
+    const pageUrl = 'https://example.com/inbox/pages/1234567890'
+    const inboxUrl = 'https://example.com/inbox/'
+
+    await createPage(pageUrl, inboxUrl, mockFetch)
+
+    const callArgs = mockFetch.mock.calls[0]
+    const body = JSON.parse(callArgs[1].body)
+    expect(body.prev).toBeUndefined()
+  })
 })
