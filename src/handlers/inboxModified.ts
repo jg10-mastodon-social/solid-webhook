@@ -41,18 +41,26 @@ export async function handleInboxModified(
   const activity = await activityResponse.json() as Record<string, unknown>
   console.log('[InboxModified] Processing activity:', activity)
 
-  const inboxUrl = event.topic
-  let pageUrl: string | undefined
-  try {
-    pageUrl = await derivePageUrl(inboxUrl, fetch)
-    if (pageUrl) {
-      const url = new URL(pageUrl)
-      const skolemizeBase = `${url.origin}/.well-known/genid/`
-      await persistInboxItem(activity, pageUrl, fetch, { skolemizeBase })
-      console.log(`[InboxModified] Persisted activity to inbox`)
+  const activityType = activity.type
+  const isDelete = activityType === 'Delete' || activityType === 'as:Delete'
+    || (Array.isArray(activityType) && activityType.some(t => t === 'Delete' || t === 'as:Delete'))
+
+  if (isDelete) {
+    console.log('[InboxModified] Delete activity, skipping persistence')
+  } else {
+    const inboxUrl = event.topic
+    let pageUrl: string | undefined
+    try {
+      pageUrl = await derivePageUrl(inboxUrl, fetch)
+      if (pageUrl) {
+        const url = new URL(pageUrl)
+        const skolemizeBase = `${url.origin}/.well-known/genid/`
+        await persistInboxItem(activity, pageUrl, fetch, { skolemizeBase })
+        console.log(`[InboxModified] Persisted activity to inbox`)
+      }
+    } catch (error) {
+      console.error(`[InboxModified] Error: Failed to persist inbox item: ${error}`)
     }
-  } catch (error) {
-    console.error(`[InboxModified] Error: Failed to persist inbox item: ${error}`)
   }
 
   const deleteResponse = await fetch(event.object, {

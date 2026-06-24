@@ -196,6 +196,44 @@ describe('InboxModified Handler', () => {
       expect(persistInboxItem).toHaveBeenCalled()
     })
 
+    it('should not persist Delete activities but still delete from inbox', async () => {
+      const activityDoc = JSON.stringify({
+        type: 'Delete',
+        id: 'https://pod.example.com/activities/456',
+        actor: 'https://pod.example.com/actor/#me',
+        object: 'https://pod.example.com/activities/123',
+      })
+
+      mockFetch.mockResolvedValue(
+        new Response(activityDoc, {
+          status: 200,
+          headers: { 'content-type': 'application/activity+json' },
+        })
+      )
+
+      const { handleInboxModified } = await import('../../src/handlers/inboxModified.js')
+      const { derivePageUrl } = await import('../../src/services/derivePageUrl.js')
+      const { persistInboxItem } = await import('../../src/services/persistInbox.js')
+
+      const event: WebhookEvent = {
+        type: 'Add',
+        object: 'https://pod.example.com/activities/456',
+        topic: 'https://pod.example.com/inbox/',
+        raw: { type: 'Add', object: 'https://pod.example.com/activities/456' },
+      }
+
+      const result = await handleInboxModified(event, mockFetch)
+
+      expect(result).toBe(true)
+      expect(derivePageUrl).not.toHaveBeenCalled()
+      expect(persistInboxItem).not.toHaveBeenCalled()
+      const deleteCalls = mockFetch.mock.calls.filter(
+        call => call[1]?.method === 'DELETE'
+      )
+      expect(deleteCalls).toHaveLength(1)
+      expect(deleteCalls[0][0]).toBe('https://pod.example.com/activities/456')
+    })
+
     it('should continue even if persist fails', async () => {
       const activityDoc = JSON.stringify({
         type: 'Create',
