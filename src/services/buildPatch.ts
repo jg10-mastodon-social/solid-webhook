@@ -17,3 +17,23 @@ export function buildInsertDeletePatch(
 `
   return patch
 }
+
+export function buildUpdatePatch(
+  oldTurtle: string,
+  newTurtle: string,
+  itemId: string,
+  pageUrl: string
+): string {
+  const patch = `${INSERT_DELETE_PATCH_PREFIX}
+      _:patch a solid:InsertDeletePatch;
+      solid:deletes {
+		      <${pageUrl}> as:items <${itemId}>.
+       ${oldTurtle}
+     };
+      solid:inserts {
+		      <${pageUrl}> as:items <${itemId}>.
+       ${newTurtle}
+     }.
+`
+  return patch
+}

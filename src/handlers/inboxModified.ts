@@ -1,6 +1,7 @@
 import type { WebhookEvent, SolidFetch } from '../types/index.js'
 import { derivePageUrl } from '../services/derivePageUrl.js'
 import { persistInboxItem } from '../services/persistInbox.js'
+import { updateInboxItem } from '../services/updateInboxItem.js'
 
 export async function handleInboxModified(
   event: WebhookEvent,
@@ -45,8 +46,54 @@ export async function handleInboxModified(
   const isDelete = activityType === 'Delete' || activityType === 'as:Delete'
     || (Array.isArray(activityType) && activityType.some(t => t === 'Delete' || t === 'as:Delete'))
 
+  const isUpdate = activityType === 'Update' || activityType === 'as:Update'
+    || (Array.isArray(activityType) && activityType.some(t => t === 'Update' || t === 'as:Update'))
+
   if (isDelete) {
     console.log('[InboxModified] Delete activity, skipping persistence')
+  } else if (isUpdate) {
+    console.log('[InboxModified] ActivityPub Update activity, updating object')
+    const inboxUrl = event.topic
+    const object = activity.object as Record<string, unknown>
+    const objectId = object.id as string
+    let updateCompleted = false
+
+    if (!objectId) {
+      console.error('[InboxModified] Error: Update activity has no object.id')
+    } else {
+      const updateOrigin = new URL(event.object).origin
+      const objectOrigin = new URL(objectId).origin
+
+      if (updateOrigin !== objectOrigin) {
+        console.warn(`[InboxModified] Update origin (${updateOrigin}) does not match object origin (${objectOrigin}), skipping`)
+      } else {
+        try {
+          const pageUrl = await derivePageUrl(inboxUrl, fetch)
+          if (pageUrl) {
+            const url = new URL(pageUrl)
+            const skolemizeBase = `${url.origin}/.well-known/genid/`
+            await updateInboxItem(object, objectId, inboxUrl, fetch, { skolemizeBase })
+            console.log(`[InboxModified] Updated object ${objectId} in inbox`)
+            updateCompleted = true
+          }
+        } catch (error) {
+          console.error(`[InboxModified] Error: Failed to update inbox item: ${error}`)
+        }
+      }
+    }
+
+    const deleteResponse = await fetch(event.object, {
+      method: 'DELETE',
+    })
+
+    if (!deleteResponse.ok) {
+      console.error(`[InboxModified] Error: Failed to delete activity: ${deleteResponse.status}`)
+    } else {
+      console.log(`[InboxModified] Deleted activity from ${event.object}`)
+    }
+
+    console.log(`[InboxModified] completed: ${updateCompleted}`)
+    return updateCompleted
   } else {
     const inboxUrl = event.topic
     let pageUrl: string | undefined
