@@ -67,6 +67,7 @@ export interface HandlerContext {
   handlerBaseUrl?: string
   handlers?: Record<string, WebhookHandler>
   whitelistedIssuers?: string[]
+  inboxPageSize?: number
 }
 
 export type WebhookHandler = (
@@ -87,6 +88,7 @@ export interface Config {
   handlerBaseUrl: string
   adminWebId: string
   skolemizeBase?: string
+  inboxPageSize?: number
 }
 
 export interface InboxCollection {
@@ -131,5 +133,6 @@ declare module 'koa' {
     sendToUrl?: string
     handlerBaseUrl?: string
     whitelistedIssuers?: string[]
+    inboxPageSize?: number
   }
 }

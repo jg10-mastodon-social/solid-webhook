@@ -56,7 +56,8 @@ export async function getInboxCollection(
 
 export async function derivePageUrl(
   inboxUrl: string,
-  fetch: SolidFetch
+  fetch: SolidFetch,
+  pageSize?: number
 ): Promise<string> {
   if (!inboxUrl.endsWith('/')) throw new Error('Inbox url should end with /')
 
@@ -76,7 +77,7 @@ export async function derivePageUrl(
 
   if (firstPageUrl) {
     try {
-      const pageInfo = await getPageInfo(firstPageUrl, fetch)
+      const pageInfo = await getPageInfo(firstPageUrl, fetch, pageSize)
       if (!pageInfo.isFull) {
         return firstPageUrl
       }

@@ -2,7 +2,7 @@ import type { SolidFetch, PageInfo, InboxPage } from '../types/index.js'
 
 export const PAGE_SIZE_LIMIT = 200
 
-export async function getPageInfo(pageUrl: string, fetch: SolidFetch): Promise<PageInfo> {
+export async function getPageInfo(pageUrl: string, fetch: SolidFetch, pageSize?: number): Promise<PageInfo> {
   const response = await fetch(pageUrl, {
     method: 'GET',
     headers: {
@@ -34,6 +34,6 @@ export async function getPageInfo(pageUrl: string, fetch: SolidFetch): Promise<P
 
   return {
     itemCount,
-    isFull: itemCount >= PAGE_SIZE_LIMIT,
+    isFull: itemCount >= (pageSize ?? PAGE_SIZE_LIMIT),
   }
 }

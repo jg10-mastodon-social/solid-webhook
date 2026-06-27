@@ -157,6 +157,7 @@ export async function main(): Promise<void> {
   app.context.handlers = handlers
   app.context.sendToUrl = config.sendToUrl
   app.context.handlerBaseUrl = config.handlerBaseUrl
+  app.context.inboxPageSize = config.inboxPageSize
 
   console.log('Subscribing to webhook channels...')
   const subscriptions = await subscribeAll(validRegistrations, fetchFn, config.sendToUrl)

@@ -129,6 +129,36 @@ describe('Config', () => {
       const config = loadConfig()
       expect(config.issuer).toBe('https://solidcommunity.net')
     })
+
+    it('should parse INBOX_PAGE_SIZE env var', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://solidcommunity.net'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
+      process.env.BASE_URL = 'http://localhost:8081'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.INBOX_PAGE_SIZE = '100'
+
+      const { loadConfig } = await import('../src/config.js')
+      const config = loadConfig()
+      expect(config.inboxPageSize).toBe(100)
+    })
+
+    it('should use default inboxPageSize when INBOX_PAGE_SIZE is not set', async () => {
+      process.env.WEBID = 'https://pod.example.com/profile/card#me'
+      process.env.ISSUER = 'https://solidcommunity.net'
+      process.env.WHITELISTED_ISSUERS = 'https://solidcommunity.net'
+      process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
+      process.env.HANDLER_BASE_URL = 'https://pod.example.com/handlers#'
+      process.env.BASE_URL = 'http://localhost:8081'
+      process.env.ADMIN_WEBID = 'https://pod.example.com/profile/card#me'
+      delete process.env.INBOX_PAGE_SIZE
+
+      const { loadConfig } = await import('../src/config.js')
+      const config = loadConfig()
+      expect(config.inboxPageSize).toBeUndefined()
+    })
   })
 
   describe('parseWebhooksFromRDF', () => {

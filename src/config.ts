@@ -33,6 +33,9 @@ export function loadConfig(): Config {
   const port = parseInt(process.env.PORT || '8081', 10)
   const sendToUrl = process.env.SEND_TO_URL || `${baseUrl}${webhookEndpoint}`
   const adminWebId = process.env.ADMIN_WEBID || ''
+  const inboxPageSize = process.env.INBOX_PAGE_SIZE
+    ? parseInt(process.env.INBOX_PAGE_SIZE, 10)
+    : undefined
 
   const whitelistedIssuers = whitelistedIssuersStr
     ? whitelistedIssuersStr.split(',').map((s) => s.trim())
@@ -49,6 +52,7 @@ export function loadConfig(): Config {
     webhookConfigUrl,
     handlerBaseUrl,
     adminWebId,
+    inboxPageSize,
   }
 }
 

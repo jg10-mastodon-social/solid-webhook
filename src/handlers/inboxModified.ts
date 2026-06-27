@@ -1,12 +1,14 @@
-import type { WebhookEvent, SolidFetch } from '../types/index.js'
+import type { WebhookEvent, SolidFetch, HandlerContext } from '../types/index.js'
 import { derivePageUrl } from '../services/derivePageUrl.js'
 import { persistInboxItem } from '../services/persistInbox.js'
 import { updateInboxItem } from '../services/updateInboxItem.js'
+import { applyActorTransformer } from './inbox/actorTransformers.js'
+import './inbox/transformers/index.js'
 
 export async function handleInboxModified(
   event: WebhookEvent,
   fetch: SolidFetch,
-  _context?: unknown
+  context?: HandlerContext
 ): Promise<boolean> {
   console.log(`[InboxModified] ${event.type} event for ${event.object} on topic ${event.topic}`)
 
@@ -42,7 +44,10 @@ export async function handleInboxModified(
   const activity = await activityResponse.json() as Record<string, unknown>
   console.log('[InboxModified] Processing activity:', activity)
 
-  const activityType = activity.type
+  const transformed = await applyActorTransformer(activity, fetch)
+  const finalActivity = transformed ?? activity
+
+  const activityType = finalActivity.type
   const isDelete = activityType === 'Delete' || activityType === 'as:Delete'
     || (Array.isArray(activityType) && activityType.some(t => t === 'Delete' || t === 'as:Delete'))
 
@@ -54,7 +59,7 @@ export async function handleInboxModified(
   } else if (isUpdate) {
     console.log('[InboxModified] ActivityPub Update activity, updating object')
     const inboxUrl = event.topic
-    const object = activity.object as Record<string, unknown>
+    const object = finalActivity.object as Record<string, unknown>
     const objectId = object.id as string
     let updateCompleted = false
 
@@ -68,7 +73,7 @@ export async function handleInboxModified(
         console.warn(`[InboxModified] Update origin (${updateOrigin}) does not match object origin (${objectOrigin}), skipping`)
       } else {
         try {
-          const pageUrl = await derivePageUrl(inboxUrl, fetch)
+          const pageUrl = await derivePageUrl(inboxUrl, fetch, context?.inboxPageSize)
           if (pageUrl) {
             const url = new URL(pageUrl)
             const skolemizeBase = `${url.origin}/.well-known/genid/`
@@ -102,7 +107,7 @@ export async function handleInboxModified(
       if (pageUrl) {
         const url = new URL(pageUrl)
         const skolemizeBase = `${url.origin}/.well-known/genid/`
-        await persistInboxItem(activity, pageUrl, fetch, { skolemizeBase })
+        await persistInboxItem(finalActivity, pageUrl, fetch, { skolemizeBase })
         console.log(`[InboxModified] Persisted activity to inbox`)
       }
     } catch (error) {

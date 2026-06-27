@@ -97,6 +97,34 @@ describe('getPageInfo', () => {
       const info = await getPageInfo('https://example.com/inbox/pages/1', mockFetch)
       expect(info.isFull).toBe(false)
     })
+
+    it('should use custom page size when provided', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          items: Array(49).fill('https://example.com/activity'),
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/ld+json' },
+        })
+      )
+
+      const info = await getPageInfo('https://example.com/inbox/pages/1', mockFetch, 50)
+      expect(info.isFull).toBe(false)
+    })
+
+    it('should report isFull when reaching custom page size', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          items: Array(50).fill('https://example.com/activity'),
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/ld+json' },
+        })
+      )
+
+      const info = await getPageInfo('https://example.com/inbox/pages/1', mockFetch, 50)
+      expect(info.isFull).toBe(true)
+    })
   })
 
   describe('error handling', () => {
