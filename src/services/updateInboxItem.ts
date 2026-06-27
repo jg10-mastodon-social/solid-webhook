@@ -153,12 +153,7 @@ export async function updateInboxItem(
   const expanded = await jsonld.expand(activityWithContext)
   const nquads = await jsonld.toRDF(expanded, { format: 'application/n-quads' }) as string
 
-  let newTurtle = nquads
-    .replace(/<http:\/\/www\.w3\.org\/1999\/02\/22-rdf-syntax-ns#_\:(\w+)>/g, (_match: string, blankNode: string) => {
-      return `<${skolemizeBase}${blankNode}>`
-    })
-
-  newTurtle = skolemizeBlankNodes(newTurtle, skolemizeBase)
+  const newTurtle = skolemizeBlankNodes(nquads, skolemizeBase)
 
   const patchBody = buildUpdatePatch(oldTurtle || '', newTurtle, objectId, pageUrl)
 

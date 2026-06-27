@@ -1,6 +1,6 @@
 import jsonld from 'jsonld'
 import type { SolidFetch } from '../types/index.js'
-import { activityToTurtle, skolemizeBlankNodes } from './activityToRdf.js'
+import { skolemizeBlankNodes } from './activityToRdf.js'
 import { buildInsertDeletePatch } from './buildPatch.js'
 
 export async function persistInboxItem(
@@ -23,12 +23,7 @@ export async function persistInboxItem(
 
   const nquads = await jsonld.toRDF(expanded, { format: 'application/n-quads' }) as string
 
-  let turtle = nquads
-    .replace(/<http:\/\/www\.w3\.org\/1999\/02\/22-rdf-syntax-ns#_\:(\w+)>/g, (_match: string, blankNode: string) => {
-      return `<${skolemizeBase}${blankNode}>`
-    })
-
-  turtle = skolemizeBlankNodes(turtle, skolemizeBase)
+  const turtle = skolemizeBlankNodes(nquads, skolemizeBase)
 
   const itemId = typeof activity.id === 'string' ? activity.id : `${skolemizeBase}${Date.now()}`
 

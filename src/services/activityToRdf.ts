@@ -182,15 +182,16 @@ export function injectContexts(obj: Record<string, unknown>): Record<string, unk
 }
 
 export function skolemizeBlankNodes(turtle: string, baseUri: string): string {
-  let result = turtle
-  let counter = 0
+  const blankNodeMap = new Map<string, string>()
   const regex = /_:b(\d+)/g
   const timestamp = Date.now()
-  result = result.replace(regex, () => {
-    const skolem = `${baseUri}${timestamp}_${counter++}`
-    return `<${skolem}>`
+  let counter = 0
+  return turtle.replace(regex, (_match: string, blankNodeNum: string) => {
+    if (!blankNodeMap.has(blankNodeNum)) {
+      blankNodeMap.set(blankNodeNum, `${baseUri}${timestamp}_${counter++}`)
+    }
+    return `<${blankNodeMap.get(blankNodeNum)}>`
   })
-  return result
 }
 
 export function activityToTurtle(activity: Record<string, unknown>, skolemizeBase?: string): string {
