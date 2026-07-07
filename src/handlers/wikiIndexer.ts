@@ -17,12 +17,14 @@ export async function handleWikiIndexer(
 
   const indexUrl = registration.indexUrl
 
+  const sparqlBody = event.type === 'Remove' ? 'DELETE DATA {}' : 'INSERT DATA {}'
+
   await fetch(indexUrl, {
     method: 'PATCH',
     headers: {
       'content-type': 'application/sparql-update',
     },
-    body: 'INSERT DATA {}',
+    body: sparqlBody,
   })
 
   return true

@@ -17,6 +17,33 @@ describe('WikiIndexer', () => {
   })
 
   describe('handleWikiIndexer', () => {
+    it('should patch index when .md file is removed', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      mockFetch.mockResolvedValueOnce({ ok: true })
+
+      const event: WebhookEvent = {
+        type: 'Remove',
+        object: 'https://pod.example.com/notes/mashlib/my-file.md',
+        topic: 'https://pod.example.com/notes/mashlib/',
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, mockContext as any)
+
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://pod.example.com/notes/mashlib/index.ttl',
+        expect.objectContaining({
+          method: 'PATCH',
+          headers: expect.objectContaining({
+            'content-type': 'application/sparql-update',
+          }),
+          body: expect.stringContaining('DELETE DATA'),
+        })
+      )
+    })
+
     it('should patch index when .md file is added', async () => {
       const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
 
