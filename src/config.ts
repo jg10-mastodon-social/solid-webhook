@@ -162,6 +162,18 @@ export function createWebhookRegistrations(
         actor: pw.actor,
       }
     }
+    if (pw.handler === 'WikiIndexer') {
+      if (!pw.indexUrl) {
+        throw new Error("WikiIndexer webhook is missing required :indexUrl")
+      }
+      return {
+        handler: 'WikiIndexer' as const,
+        topic: pw.topic,
+        callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
+        indexUrl: pw.indexUrl,
+        actor: pw.actor,
+      }
+    }
     throw new Error(`Unknown handler: ${pw.handler}`)
   })
 }

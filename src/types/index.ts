@@ -28,11 +28,20 @@ export interface ItemListIndexerWebhook {
   actor?: string
 }
 
+export interface WikiIndexerWebhook {
+  handler: 'WikiIndexer'
+  topic: string
+  callback: WebhookHandler
+  indexUrl: string
+  actor?: string
+}
+
 export type WebhookRegistration =
   | InboxModifiedWebhook
   | CommitHandlerWebhook
   | UpdateWebhooksWebhook
   | ItemListIndexerWebhook
+  | WikiIndexerWebhook
 
 export interface SubscriptionInfo {
   id: string

@@ -19,6 +19,10 @@ const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, 
     const { handleItemListIndexer } = await import('./handlers/itemListIndexer.js')
     await handleItemListIndexer(event, fetch, ctx)
   },
+  WikiIndexer: async (event, fetch, ctx) => {
+    const { handleWikiIndexer } = await import('./handlers/wikiIndexer.js')
+    await handleWikiIndexer(event, fetch, ctx)
+  },
 }
 
 export async function main(): Promise<void> {
@@ -123,6 +127,19 @@ export async function main(): Promise<void> {
           topic: w.topic,
           callback: async (event, fetch) => {
             await handlers.ItemListIndexer(event, fetch, app.context)
+          },
+          indexUrl: w.indexUrl,
+          actor: w.actor,
+        })
+      } else if (w.handler === 'WikiIndexer') {
+        if (!w.indexUrl) {
+          throw new Error("WikiIndexer webhook is missing required :indexUrl")
+        }
+        validRegistrations.push({
+          handler: 'WikiIndexer' as const,
+          topic: w.topic,
+          callback: async (event, fetch) => {
+            await handlers.WikiIndexer(event, fetch, app.context)
           },
           indexUrl: w.indexUrl,
           actor: w.actor,
