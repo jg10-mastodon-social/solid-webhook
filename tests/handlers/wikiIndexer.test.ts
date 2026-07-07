@@ -17,6 +17,39 @@ describe('WikiIndexer', () => {
   })
 
   describe('handleWikiIndexer', () => {
+    it('should return false when no registration found', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      const event: WebhookEvent = {
+        type: 'Add',
+        object: 'https://pod.example.com/notes/mashlib/my-file.md',
+        topic: 'https://pod.example.com/notes/mashlib/',
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, {} as any)
+
+      expect(result).toBe(false)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('should return false when PATCH request fails', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 })
+
+      const event: WebhookEvent = {
+        type: 'Add',
+        object: 'https://pod.example.com/notes/mashlib/my-file.md',
+        topic: 'https://pod.example.com/notes/mashlib/',
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, mockContext as any)
+
+      expect(result).toBe(false)
+    })
+
     it('should not patch index for non-markdown files', async () => {
       const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
 

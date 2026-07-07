@@ -53,13 +53,18 @@ export async function handleWikiIndexer(
     ? buildDeleteUpdate(fileUrl, title, indexUrl)
     : buildInsertUpdate(fileUrl, title, indexUrl)
 
-  await fetch(indexUrl, {
+  const patchResponse = await fetch(indexUrl, {
     method: 'PATCH',
     headers: {
       'content-type': 'application/sparql-update',
     },
     body: sparqlBody,
   })
+
+  if (!patchResponse.ok) {
+    console.error(`[WikiIndexer] Error: Failed to update index: ${patchResponse.status}`)
+    return false
+  }
 
   return true
 }
