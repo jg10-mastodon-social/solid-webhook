@@ -33,8 +33,10 @@ describe('WikiIndexer', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
-    it('should not patch index when .md file is removed', async () => {
+    it('should patch index when .md file is removed', async () => {
       const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      mockFetch.mockResolvedValueOnce({ ok: true })
 
       const event: WebhookEvent = {
         type: 'Remove',
@@ -56,6 +58,10 @@ describe('WikiIndexer', () => {
           body: expect.stringContaining('DELETE DATA'),
         })
       )
+      const patchBody = mockFetch.mock.calls[0][1].body as string
+      expect(patchBody).toContain('<https://pod.example.com/notes/mashlib/my-file.md>')
+      expect(patchBody).toContain('rdfs:label')
+      expect(patchBody).toContain('"My File"')
     })
 
     it('should patch index when .md file is added', async () => {
@@ -83,6 +89,10 @@ describe('WikiIndexer', () => {
           body: expect.stringContaining('INSERT DATA'),
         })
       )
+      const patchBody = mockFetch.mock.calls[0][1].body as string
+      expect(patchBody).toContain('<https://pod.example.com/notes/mashlib/my-file.md>')
+      expect(patchBody).toContain('rdfs:label')
+      expect(patchBody).toContain('"My File"')
     })
   })
 })

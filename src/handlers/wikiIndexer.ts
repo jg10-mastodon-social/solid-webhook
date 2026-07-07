@@ -1,5 +1,27 @@
 import type { WebhookEvent, SolidFetch, HandlerContext, WikiIndexerWebhook } from '../types/index.js'
 
+function basenameToTitle(filename: string): string {
+  const name = filename.endsWith('.md') ? filename.slice(0, -3) : filename
+  return name
+    .split(/[-_]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function buildInsertUpdate(fileUrl: string, title: string, indexUrl: string): string {
+  return `PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+INSERT DATA {
+  <${fileUrl}> rdfs:label "${title}" .
+}`
+}
+
+function buildDeleteUpdate(fileUrl: string, title: string, indexUrl: string): string {
+  return `PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+DELETE DATA {
+  <${fileUrl}> rdfs:label "${title}" .
+}`
+}
+
 export async function handleWikiIndexer(
   event: WebhookEvent,
   fetch: SolidFetch,
@@ -21,8 +43,15 @@ export async function handleWikiIndexer(
   }
 
   const indexUrl = registration.indexUrl
+  const fileUrl = event.object
 
-  const sparqlBody = event.type === 'Remove' ? 'DELETE DATA {}' : 'INSERT DATA {}'
+  const urlParts = fileUrl.split('/')
+  const filename = urlParts[urlParts.length - 1] || ''
+  const title = basenameToTitle(filename)
+
+  const sparqlBody = event.type === 'Remove'
+    ? buildDeleteUpdate(fileUrl, title, indexUrl)
+    : buildInsertUpdate(fileUrl, title, indexUrl)
 
   await fetch(indexUrl, {
     method: 'PATCH',
