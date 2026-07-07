@@ -1,6 +1,6 @@
 import type { WebhookEvent, SolidFetch, HandlerContext, WikiIndexerWebhook } from '../types/index.js'
 
-function basenameToTitle(filename: string): string {
+export function basenameToTitle(filename: string): string {
   const name = filename.endsWith('.md') ? filename.slice(0, -3) : filename
   return name
     .split(/[-_]/)

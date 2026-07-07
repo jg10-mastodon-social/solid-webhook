@@ -128,4 +128,26 @@ describe('WikiIndexer', () => {
       expect(patchBody).toContain('"My File"')
     })
   })
+
+  describe('basenameToTitle', () => {
+    it('converts kebab-case to Title Case', async () => {
+      const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
+      expect(basenameToTitle('my-file.md')).toBe('My File')
+    })
+
+    it('converts snake_case to Title Case', async () => {
+      const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
+      expect(basenameToTitle('my_file.md')).toBe('My File')
+    })
+
+    it('handles single word filename', async () => {
+      const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
+      expect(basenameToTitle('readme.md')).toBe('Readme')
+    })
+
+    it('handles filename without extension', async () => {
+      const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
+      expect(basenameToTitle('my-file')).toBe('My File')
+    })
+  })
 })
