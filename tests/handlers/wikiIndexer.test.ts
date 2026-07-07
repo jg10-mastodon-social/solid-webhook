@@ -17,10 +17,24 @@ describe('WikiIndexer', () => {
   })
 
   describe('handleWikiIndexer', () => {
-    it('should patch index when .md file is removed', async () => {
+    it('should not patch index for non-markdown files', async () => {
       const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
 
-      mockFetch.mockResolvedValueOnce({ ok: true })
+      const event: WebhookEvent = {
+        type: 'Add',
+        object: 'https://pod.example.com/notes/mashlib/data.json',
+        topic: 'https://pod.example.com/notes/mashlib/',
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, mockContext as any)
+
+      expect(result).toBe(false)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('should not patch index when .md file is removed', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
 
       const event: WebhookEvent = {
         type: 'Remove',

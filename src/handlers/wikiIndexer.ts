@@ -15,6 +15,11 @@ export async function handleWikiIndexer(
     return false
   }
 
+  if (!event.object.endsWith('.md')) {
+    console.log('[WikiIndexer] Not a markdown file, skipping')
+    return false
+  }
+
   const indexUrl = registration.indexUrl
 
   const sparqlBody = event.type === 'Remove' ? 'DELETE DATA {}' : 'INSERT DATA {}'
