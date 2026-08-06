@@ -102,7 +102,7 @@ describe('processInbox', () => {
           object: 'https://example.com/inbox/activity1',
           topic: 'https://example.com/inbox/',
         }),
-        mockFetch
+        expect.any(Function)
       )
       expect(mockFetch).toHaveBeenCalledTimes(1)
     })
@@ -227,11 +227,11 @@ describe('processInbox', () => {
       expect(handleFn).toHaveBeenCalledTimes(2)
       expect(handleFn).toHaveBeenCalledWith(
         expect.objectContaining({ object: 'https://example.com/inbox/activity1' }),
-        mockFetch
+        expect.any(Function)
       )
       expect(handleFn).toHaveBeenCalledWith(
         expect.objectContaining({ object: 'https://example.com/inbox/activity2' }),
-        mockFetch
+        expect.any(Function)
       )
       expect(mockFetch).toHaveBeenCalledTimes(1)
     })
@@ -562,6 +562,114 @@ ${items.join('\n')}`
 
       expect(handleFn).toHaveBeenCalledTimes(10)
       expect(maxConcurrent).toBeGreaterThan(1)
+    })
+
+    it('should apply coordinated delay between chunks after 429', async () => {
+      vi.useFakeTimers()
+
+      const items = Array.from({ length: 15 }, (_, i) => `
+<https://example.com/inbox/activity${i}> a ldp:Resource.`)
+      const contains = Array.from({ length: 15 }, (_, i) => `<https://example.com/inbox/activity${i}>`).join(',\n               ')
+
+      const inboxTurtle = `@prefix ldp: <http://www.w3.org/ns/ldp#>.
+<> a ldp:Container, ldp:BasicContainer;
+   ldp:contains ${contains}.
+${items.join('\n')}`
+
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/inbox/')) {
+          return Promise.resolve(
+            new Response(inboxTurtle, {
+              status: 200,
+              headers: { 'content-type': 'text/turtle' },
+            })
+          )
+        }
+        if (url.includes('activity5')) {
+          return Promise.resolve(
+            new Response('', { status: 429, headers: { 'Retry-After': '2' } })
+          )
+        }
+        return Promise.resolve(
+          new Response('{}', { status: 200, headers: { 'content-type': 'application/activity+json' } })
+        )
+      })
+
+      const handleFn = vi.fn().mockImplementation(async (event, fetch) => {
+        await fetch(event.object, { headers: { accept: 'application/activity+json' } })
+        return true
+      })
+
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const promise = processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+
+      await vi.runAllTimersAsync()
+      await promise
+
+      const delayLogs = consoleSpy.mock.calls.filter(call =>
+        call[0]?.includes('Rate limited') || call[0]?.includes('waiting')
+      )
+      expect(delayLogs.length).toBeGreaterThan(0)
+
+      consoleSpy.mockRestore()
+      vi.useRealTimers()
+    })
+
+    it('should use max Retry-After when multiple items get 429 in same chunk', async () => {
+      vi.useFakeTimers()
+
+      const items = Array.from({ length: 10 }, (_, i) => `
+<https://example.com/inbox/activity${i}> a ldp:Resource.`)
+      const contains = Array.from({ length: 10 }, (_, i) => `<https://example.com/inbox/activity${i}>`).join(',\n               ')
+
+      const inboxTurtle = `@prefix ldp: <http://www.w3.org/ns/ldp#>.
+<> a ldp:Container, ldp:BasicContainer;
+   ldp:contains ${contains}.
+${items.join('\n')}`
+
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/inbox/')) {
+          return Promise.resolve(
+            new Response(inboxTurtle, {
+              status: 200,
+              headers: { 'content-type': 'text/turtle' },
+            })
+          )
+        }
+        if (url.includes('activity2') || url.includes('activity7')) {
+          return Promise.resolve(
+            new Response('', { status: 429, headers: { 'Retry-After': '5' } })
+          )
+        }
+        return Promise.resolve(
+          new Response('{}', { status: 200, headers: { 'content-type': 'application/activity+json' } })
+        )
+      })
+
+      const handleFn = vi.fn().mockImplementation(async (event, fetch) => {
+        await fetch(event.object, { headers: { accept: 'application/activity+json' } })
+        return true
+      })
+
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const promise = processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+
+      await vi.runAllTimersAsync()
+      await promise
+
+      const delayLogs = consoleSpy.mock.calls.filter(call =>
+        call[0]?.includes('5')
+      )
+      expect(delayLogs.length).toBeGreaterThan(0)
+
+      consoleSpy.mockRestore()
+      vi.useRealTimers()
     })
   })
 })

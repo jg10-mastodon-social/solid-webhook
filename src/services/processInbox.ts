@@ -135,7 +135,7 @@ async function getChildResources(inboxUrl: string, fetch: SolidFetch): Promise<C
   return children
 }
 
-const CHUNK_SIZE = 50
+const CHUNK_SIZE = 5
 const CHUNK_DELAY_MS = 100
 
 function sleep(ms: number): Promise<void> {
@@ -156,9 +156,27 @@ async function processChunk(
   inboxUrl: string,
   fetch: SolidFetch,
   handleFn: (event: WebhookEvent, fetch: SolidFetch, context?: unknown) => void | Promise<void>
-): Promise<{ processed: number; skipped: number }> {
+): Promise<{ processed: number; skipped: number; maxRetryAfterSeconds: number | null }> {
   let processed = 0
   let skipped = 0
+  let maxRetryAfterSeconds: number | null = null
+
+  const trackedFetch: SolidFetch = async (url, options) => {
+    const response = await fetch(url, options)
+    if (response.status === 429) {
+      const retryAfterHeader = response.headers.get('Retry-After')
+      let retryAfterSeconds: number | null = null
+      if (retryAfterHeader) {
+        retryAfterSeconds = parseRetryAfter(retryAfterHeader)
+      }
+      if (retryAfterSeconds === null || maxRetryAfterSeconds === null) {
+        maxRetryAfterSeconds = retryAfterSeconds
+      } else {
+        maxRetryAfterSeconds = Math.max(maxRetryAfterSeconds, retryAfterSeconds)
+      }
+    }
+    return response
+  }
 
   const promises = chunk.map(async (child) => {
     if (isContainer(child)) {
@@ -174,7 +192,7 @@ async function processChunk(
           topic: inboxUrl,
           raw: {},
         },
-        fetch
+        trackedFetch
       )
       processed++
     } catch (error) {
@@ -184,7 +202,7 @@ async function processChunk(
 
   await Promise.all(promises)
 
-  return { processed, skipped }
+  return { processed, skipped, maxRetryAfterSeconds }
 }
 
 export async function processExistingInboxItems(
@@ -210,8 +228,13 @@ export async function processExistingInboxItems(
     skipped += result.skipped
 
     if (i + CHUNK_SIZE < children.length) {
-      console.log(`[processInbox] Progress: ${processed}/${total}`)
-      await sleep(CHUNK_DELAY_MS)
+      if (result.maxRetryAfterSeconds !== null) {
+        console.log(`[processInbox] Rate limited, waiting ${result.maxRetryAfterSeconds}s before next chunk`)
+        await sleep(result.maxRetryAfterSeconds * 1000)
+      } else {
+        console.log(`[processInbox] Progress: ${processed}/${total}`)
+        await sleep(CHUNK_DELAY_MS)
+      }
     }
   }
 
