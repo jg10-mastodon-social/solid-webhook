@@ -266,3 +266,227 @@ describe('renewSubscription', () => {
     expect(failed!.error).toBeTruthy()
   })
 })
+
+describe('renewAllSubscriptions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    nextSubId = 1
+  })
+
+  const buildReg = (topic: string): WebhookRegistration => ({
+    handler: 'InboxModified',
+    topic,
+    callback: async () => {},
+  })
+
+  it('should renew subscriptions expiring within 1 day', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, renewAllSubscriptions } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    const originalId = subs[0].id
+    subs[0].endAt = new Date(Date.now() + 60 * 60 * 1000)
+
+    vi.clearAllMocks()
+    setupSubscribeAndDeleteGlobal()
+
+    const renewed = await renewAllSubscriptions(
+      subs,
+      'https://pod.example.com/webhook/',
+      mockFetch as unknown as SolidFetch
+    )
+
+    expect(renewed).toContain(subs[0].id)
+    expect(subs[0].id).not.toBe(originalId)
+  })
+
+  it('should skip subscriptions with more than 1 day until expiry', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, renewAllSubscriptions } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    subs[0].endAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+    vi.clearAllMocks()
+    setupSubscribeAndDeleteGlobal()
+
+    const renewed = await renewAllSubscriptions(
+      subs,
+      'https://pod.example.com/webhook/',
+      mockFetch as unknown as SolidFetch
+    )
+
+    expect(renewed).toEqual([])
+  })
+
+  it('should skip failed subscriptions', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, renewAllSubscriptions } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    subs[0].status = 'failed'
+    subs[0].error = 'previous failure'
+    subs[0].endAt = new Date(Date.now() + 60 * 60 * 1000)
+
+    vi.clearAllMocks()
+    setupSubscribeAndDeleteGlobal()
+
+    const renewed = await renewAllSubscriptions(
+      subs,
+      'https://pod.example.com/webhook/',
+      mockFetch as unknown as SolidFetch
+    )
+
+    expect(renewed).toEqual([])
+  })
+
+  it('should skip subscriptions without endAt', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, renewAllSubscriptions } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    subs[0].endAt = undefined
+
+    vi.clearAllMocks()
+    setupSubscribeAndDeleteGlobal()
+
+    const renewed = await renewAllSubscriptions(
+      subs,
+      'https://pod.example.com/webhook/',
+      mockFetch as unknown as SolidFetch
+    )
+
+    expect(renewed).toEqual([])
+  })
+
+  it('should continue renewing other subscriptions when one fails', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, renewAllSubscriptions } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [
+        buildReg('https://pod.example.com/inbox/1/'),
+        buildReg('https://pod.example.com/inbox/2/'),
+      ],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    subs[0].endAt = new Date(Date.now() + 60 * 60 * 1000)
+    subs[1].endAt = new Date(Date.now() + 60 * 60 * 1000)
+
+    const failingId = subs[0].id
+    const survivingId = subs[1].id
+
+    vi.clearAllMocks()
+    let callCount = 0
+    mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = typeof url === 'string' ? url : url.toString()
+
+      if (init?.method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'link': '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+          },
+        })
+      }
+
+      if (urlStr.includes('solid-storage') && init?.method === undefined) {
+        return new Response(mockSocketList, {
+          status: 200,
+          headers: { 'content-type': 'text/turtle' },
+        })
+      }
+
+      if (urlStr.includes('solid-storage') && init?.method === 'POST') {
+        callCount += 1
+        if (callCount === 1) {
+          return new Response(null, { status: 500 })
+        }
+        return new Response(nextSubscriptionResponse(), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
+      if (init?.method === 'DELETE') {
+        return new Response(null, { status: 204 })
+      }
+
+      throw new Error(`Unexpected URL: ${urlStr}`)
+    })
+
+    const renewed = await renewAllSubscriptions(
+      subs,
+      'https://pod.example.com/webhook/',
+      mockFetch as unknown as SolidFetch
+    )
+
+    expect(renewed).toContain(subs.find((s) => s.topic === 'https://pod.example.com/inbox/2/')!.id)
+    expect(renewed).not.toContain(failingId)
+    expect(subs.find((s) => s.id === survivingId)).toBeUndefined()
+    expect(subs.find((s) => s.id === failingId)).toBeDefined()
+    expect(subs.find((s) => s.id === failingId)!.status).toBe('failed')
+  })
+})
+
+function setupSubscribeAndDeleteGlobal() {
+  mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+    const urlStr = typeof url === 'string' ? url : url.toString()
+
+    if (init?.method === 'HEAD') {
+      return new Response(null, {
+        status: 200,
+        headers: {
+          'link': '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+        },
+      })
+    }
+
+    if (urlStr.includes('solid-storage') && init?.method === undefined) {
+      return new Response(mockSocketList, {
+        status: 200,
+        headers: { 'content-type': 'text/turtle' },
+      })
+    }
+
+    if (urlStr.includes('solid-storage') && init?.method === 'POST') {
+      return new Response(nextSubscriptionResponse(), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+
+    if (init?.method === 'DELETE') {
+      return new Response(null, { status: 204 })
+    }
+
+    throw new Error(`Unexpected URL: ${urlStr}`)
+  })
+}

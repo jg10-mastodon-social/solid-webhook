@@ -225,3 +225,29 @@ export async function renewSubscription(
   subscriptions[index] = renewed
   return renewed
 }
+
+const RENEWAL_THRESHOLD_MS = 24 * 60 * 60 * 1000
+
+export async function renewAllSubscriptions(
+  subscriptions: TrackedSubscription[],
+  sendToUrl: string,
+  fetchFn: SolidFetch
+): Promise<string[]> {
+  const now = Date.now()
+  const renewed: string[] = []
+
+  for (const sub of subscriptions) {
+    if (sub.status === 'failed') continue
+    if (!sub.endAt) continue
+    if (sub.endAt.getTime() - now > RENEWAL_THRESHOLD_MS) continue
+
+    try {
+      const result = await renewSubscription(subscriptions, sub.id, sendToUrl, fetchFn)
+      renewed.push(result.id)
+    } catch (error) {
+      console.error(`Failed to renew subscription ${sub.id}:`, error)
+    }
+  }
+
+  return renewed
+}
