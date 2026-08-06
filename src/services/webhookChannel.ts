@@ -4,7 +4,8 @@ import type { SolidFetch, SubscriptionInfo } from '../types/index.js'
 export async function subscribeWebhookChannel(
   topic: string,
   sendTo: string,
-  fetch: SolidFetch
+  fetch: SolidFetch,
+  endAt?: Date
 ): Promise<SubscriptionInfo> {
   const headResponse = await fetch(topic, { method: 'HEAD' })
 
@@ -40,17 +41,23 @@ export async function subscribeWebhookChannel(
     throw new Error('No WebhookChannel2023 socket found')
   }
 
+  const body: Record<string, string> = {
+    '@context': 'https://www.w3.org/ns/solid/notification/v1',
+    type: 'http://www.w3.org/ns/solid/notifications#WebhookChannel2023',
+    topic: topic,
+    sendTo: sendTo,
+  }
+
+  if (endAt) {
+    body.endAt = endAt.toISOString()
+  }
+
   const subscriptionResponse = await fetch(socketUrl, {
     method: 'POST',
     headers: {
       'content-type': 'application/ld+json',
     },
-    body: JSON.stringify({
-      '@context': 'https://www.w3.org/ns/solid/notification/v1',
-      type: 'http://www.w3.org/ns/solid/notifications#WebhookChannel2023',
-      topic: topic,
-      sendTo: sendTo,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!subscriptionResponse.ok) {

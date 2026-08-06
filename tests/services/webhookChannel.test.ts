@@ -90,6 +90,60 @@ describe('WebhookChannel Service', () => {
       })
     })
 
+    it('should include endAt in subscription POST body', async () => {
+      const mockSubscriptionResponse = JSON.stringify({
+        '@context': 'https://www.w3.org/ns/solid/notification/v1',
+        type: 'http://www.w3.org/ns/solid/notifications#WebhookChannel2023',
+        id: 'https://pod.example.com/webhook/endat',
+        receiveFrom: 'https://pod.example.com/webhook/receive/endat',
+      })
+
+      let capturedPostBody: any = null
+
+      mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url.toString()
+
+        if (init?.method === 'HEAD' && urlStr.includes('/inbox/')) {
+          return new Response(null, {
+            status: 200,
+            headers: {
+              'link': '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+            },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === undefined) {
+          return new Response(mockSocketList, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        }
+
+        if (urlStr.includes('solid-storage') && init?.method === 'POST') {
+          capturedPostBody = JSON.parse(init.body as string)
+          return new Response(mockSubscriptionResponse, {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+
+        throw new Error(`Unexpected URL: ${urlStr}`)
+      })
+
+      const { subscribeWebhookChannel } = await import('../../src/services/webhookChannel.js')
+
+      const endAt = new Date('2026-08-13T12:00:00.000Z')
+      await subscribeWebhookChannel(
+        'https://pod.example.com/inbox/',
+        'https://pod.example.com/webhook/',
+        mockFetch,
+        endAt
+      )
+
+      expect(capturedPostBody).toBeTruthy()
+      expect(capturedPostBody.endAt).toBe('2026-08-13T12:00:00.000Z')
+    })
+
     it('should throw if topic URL returns no storage description', async () => {
       const mockResponses = new Map<string, () => Response>([
         [
