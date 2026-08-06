@@ -89,30 +89,35 @@ async function getChildResources(inboxUrl: string, fetch: SolidFetch): Promise<C
   return children
 }
 
-export async function processExistingInboxItems(
+const CHUNK_SIZE = 50
+const CHUNK_DELAY_MS = 100
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isContainer(child: ChildResource): boolean {
+  return child.types.some(t =>
+    t === 'http://www.w3.org/ns/ldp#Container' ||
+    t === 'http://www.w3.org/ns/ldp#BasicContainer' ||
+    t === 'http://www.w3.org/ns/ldp#DirectContainer' ||
+    t === 'http://www.w3.org/ns/ldp#IndirectContainer'
+  )
+}
+
+async function processChunk(
+  chunk: ChildResource[],
   inboxUrl: string,
   fetch: SolidFetch,
   handleFn: (event: WebhookEvent, fetch: SolidFetch, context?: unknown) => void | Promise<void>
 ): Promise<{ processed: number; skipped: number }> {
-  const children = await getChildResources(inboxUrl, fetch)
-
-  if (children.length === 0) {
-    return { processed: 0, skipped: 0 }
-  }
-
   let processed = 0
   let skipped = 0
 
-  for (const child of children) {
-    const isContainer = child.types.some(t =>
-      t === 'http://www.w3.org/ns/ldp#Container' ||
-      t === 'http://www.w3.org/ns/ldp#BasicContainer' ||
-      t === 'http://www.w3.org/ns/ldp#DirectContainer' ||
-      t === 'http://www.w3.org/ns/ldp#IndirectContainer'
-    )
-    if (isContainer) {
+  const promises = chunk.map(async (child) => {
+    if (isContainer(child)) {
       skipped++
-      continue
+      return
     }
 
     try {
@@ -129,7 +134,40 @@ export async function processExistingInboxItems(
     } catch (error) {
       console.error(`[processInbox] Error processing ${child.url}: ${error}`)
     }
-  }
+  })
+
+  await Promise.all(promises)
 
   return { processed, skipped }
+}
+
+export async function processExistingInboxItems(
+  inboxUrl: string,
+  fetch: SolidFetch,
+  handleFn: (event: WebhookEvent, fetch: SolidFetch, context?: unknown) => void | Promise<void>
+): Promise<{ processed: number; skipped: number; total: number }> {
+  const children = await getChildResources(inboxUrl, fetch)
+  const total = children.length
+
+  if (children.length === 0) {
+    return { processed: 0, skipped: 0, total: 0 }
+  }
+
+  let processed = 0
+  let skipped = 0
+
+  for (let i = 0; i < children.length; i += CHUNK_SIZE) {
+    const chunk = children.slice(i, i + CHUNK_SIZE)
+    const result = await processChunk(chunk, inboxUrl, fetch, handleFn)
+
+    processed += result.processed
+    skipped += result.skipped
+
+    if (i + CHUNK_SIZE < children.length) {
+      console.log(`[processInbox] Progress: ${processed}/${total}`)
+      await sleep(CHUNK_DELAY_MS)
+    }
+  }
+
+  return { processed, skipped, total }
 }

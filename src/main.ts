@@ -182,19 +182,19 @@ export async function main(): Promise<void> {
   const activeCount = subscriptions.filter(s => s.status === 'active').length
   console.log(`Subscribed to ${activeCount}/${subscriptions.length + failedSubscriptions.length} webhook channels`)
 
-  console.log('Processing existing inbox items...')
+  console.log(`Solid Webhook server running on port ${config.port}`)
+
+  console.log('Processing existing inbox items in background...')
   const inboxRegistrations = validRegistrations.filter((reg) => reg.handler === 'InboxModified')
   for (const reg of inboxRegistrations) {
-    try {
-      console.log(`Processing existing items from ${reg.topic}...`)
-      const { processed, skipped } = await processExistingInboxItems(reg.topic, fetchFn, handlers.InboxModified)
-      console.log(`Processed ${processed} existing items from ${reg.topic} (${skipped} skipped)`)
-    } catch (error) {
-      console.error(`Failed to process existing inbox items for ${reg.topic}: ${error}`)
-    }
+    processExistingInboxItems(reg.topic, fetchFn, handlers.InboxModified)
+      .then(({ processed, skipped, total }) => {
+        console.log(`Processed ${processed} existing items from ${reg.topic} (${skipped} skipped, ${total} total)`)
+      })
+      .catch((error) => {
+        console.error(`Failed to process existing inbox items for ${reg.topic}: ${error}`)
+      })
   }
-
-  console.log(`Solid Webhook server running on port ${config.port}`)
 
   const shutdown = async () => {
     console.log('Shutting down...')
