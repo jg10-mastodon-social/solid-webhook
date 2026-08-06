@@ -7,25 +7,22 @@ vi.mock('@soid/koa', () => ({
   getAuthenticatedFetch: vi.fn().mockResolvedValue(mockFetch),
 }))
 
-const mockStorageDescription = `
-@prefix solid: <http://www.w3.org/ns/solid/terms#> .
-@prefix notifications: <http://www.w3.org/ns/solid/notifications#> .
-
-<https://pod.example.com/> solid:storageDescription <https://pod.example.com/.well-known/solid-storage> .
-`
-
 const mockSocketList = `
 @prefix notifications: <http://www.w3.org/ns/solid/notifications#> .
 
 <https://pod.example.com/.well-known/solid-storage> notifications:channelType notifications:WebhookChannel2023 .
 `
 
-const mockSubscriptionResponse = JSON.stringify({
-  '@context': 'https://www.w3.org/ns/solid/notification/v1',
-  type: 'http://www.w3.org/ns/solid/notifications#WebhookChannel2023',
-  id: 'https://pod.example.com/webhook/sub-id',
-  receiveFrom: 'https://pod.example.com/webhook/receive/sub-id',
-})
+let nextSubId = 1
+function nextSubscriptionResponse() {
+  const id = `https://pod.example.com/webhook/sub-${nextSubId++}`
+  return JSON.stringify({
+    '@context': 'https://www.w3.org/ns/solid/notification/v1',
+    type: 'http://www.w3.org/ns/solid/notifications#WebhookChannel2023',
+    id,
+    receiveFrom: `https://pod.example.com/webhook/receive/${id.split('/').pop()}`,
+  })
+}
 
 function setupSuccessfulSubscribeMock() {
   mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
@@ -48,10 +45,14 @@ function setupSuccessfulSubscribeMock() {
     }
 
     if (urlStr.includes('solid-storage') && init?.method === 'POST') {
-      return new Response(mockSubscriptionResponse, {
+      return new Response(nextSubscriptionResponse(), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
+    }
+
+    if (init?.method === 'DELETE') {
+      return new Response(null, { status: 204 })
     }
 
     throw new Error(`Unexpected URL: ${urlStr}`)
@@ -61,6 +62,7 @@ function setupSuccessfulSubscribeMock() {
 describe('subscribeAll', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    nextSubId = 1
   })
 
   const buildReg = (topic: string): WebhookRegistration => ({
@@ -113,5 +115,154 @@ describe('subscribeAll', () => {
     expect((subs[0].endAt as Date).getTime()).toBe(expectedEndMs)
 
     delete process.env.SUBSCRIPTION_DURATION_MINUTES
+  })
+})
+
+describe('renewSubscription', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    nextSubId = 1
+  })
+
+  const buildReg = (topic: string): WebhookRegistration => ({
+    handler: 'InboxModified',
+    topic,
+    callback: async () => {},
+  })
+
+  function setupSubscribeAndDelete() {
+    const deleteCalls: string[] = []
+    mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = typeof url === 'string' ? url : url.toString()
+
+      if (init?.method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'link': '<https://pod.example.com/.well-known/solid-storage>; rel="http://www.w3.org/ns/solid/terms#storageDescription"',
+          },
+        })
+      }
+
+      if (urlStr.includes('solid-storage') && init?.method === undefined) {
+        return new Response(mockSocketList, {
+          status: 200,
+          headers: { 'content-type': 'text/turtle' },
+        })
+      }
+
+      if (urlStr.includes('solid-storage') && init?.method === 'POST') {
+        return new Response(nextSubscriptionResponse(), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
+      if (init?.method === 'DELETE') {
+        deleteCalls.push(urlStr)
+        return new Response(null, { status: 204 })
+      }
+
+      throw new Error(`Unexpected URL: ${urlStr}`)
+    })
+    return deleteCalls
+  }
+
+  it('should create a new subscription, delete the old one, and update tracking', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, renewSubscription } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    const originalId = subs[0].id
+    const originalEndAt = subs[0].endAt
+
+    vi.clearAllMocks()
+    const deleteCalls = setupSubscribeAndDelete()
+
+    const result = await renewSubscription(
+      subs,
+      originalId,
+      'https://pod.example.com/webhook/',
+      mockFetch as unknown as SolidFetch
+    )
+
+    expect(result).toBeDefined()
+    expect(result!.id).not.toBe(originalId)
+    expect(result!.topic).toBe('https://pod.example.com/inbox/')
+    expect(result!.status).toBe('active')
+    expect(result!.endAt).toBeInstanceOf(Date)
+    expect((result!.endAt as Date).getTime()).toBeGreaterThan(originalEndAt!.getTime())
+
+    expect(deleteCalls).toEqual([originalId])
+
+    const updated = subs.find((s) => s.id === result!.id)
+    expect(updated).toBeDefined()
+    expect(subs.find((s) => s.id === originalId)).toBeUndefined()
+  })
+
+  it('should throw if subscription id is not found', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, renewSubscription } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    await expect(
+      renewSubscription(
+        subs,
+        'https://pod.example.com/webhook/does-not-exist',
+        'https://pod.example.com/webhook/',
+        mockFetch as unknown as SolidFetch
+      )
+    ).rejects.toThrow('Subscription not found')
+  })
+
+  it('should mark subscription as failed if new subscribe fails', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, renewSubscription } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    const originalId = subs[0].id
+
+    vi.clearAllMocks()
+    mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = typeof url === 'string' ? url : url.toString()
+
+      if (init?.method === 'HEAD') {
+        return new Response(null, { status: 500 })
+      }
+
+      throw new Error(`Unexpected URL: ${urlStr}`)
+    })
+
+    await expect(
+      renewSubscription(
+        subs,
+        originalId,
+        'https://pod.example.com/webhook/',
+        mockFetch as unknown as SolidFetch
+      )
+    ).rejects.toThrow()
+
+    const failed = subs.find((s) => s.id === originalId)
+    expect(failed).toBeDefined()
+    expect(failed!.status).toBe('failed')
+    expect(failed!.error).toBeTruthy()
   })
 })

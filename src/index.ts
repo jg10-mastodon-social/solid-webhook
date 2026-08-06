@@ -175,3 +175,53 @@ export async function unsubscribeAll(
     }
   }
 }
+
+export async function renewSubscription(
+  subscriptions: TrackedSubscription[],
+  subscriptionId: string,
+  sendToUrl: string,
+  fetchFn: SolidFetch
+): Promise<TrackedSubscription> {
+  const index = subscriptions.findIndex((s) => s.id === subscriptionId)
+  if (index === -1) {
+    throw new Error(`Subscription not found: ${subscriptionId}`)
+  }
+
+  const existing = subscriptions[index]
+  const durationMinutes = parseInt(process.env.SUBSCRIPTION_DURATION_MINUTES || '10080', 10)
+  const durationMs = durationMinutes * 60 * 1000
+  const newCreatedAt = new Date()
+  const newEndAt = new Date(newCreatedAt.getTime() + durationMs)
+
+  let newSubscriptionInfo
+  try {
+    newSubscriptionInfo = await subscribeWebhookChannel(
+      existing.topic,
+      sendToUrl,
+      fetchFn,
+      newEndAt
+    )
+  } catch (error) {
+    existing.status = 'failed'
+    existing.error = error instanceof Error ? error.message : 'Unknown error'
+    throw error
+  }
+
+  try {
+    await unsubscribeWebhookChannel(existing.id, fetchFn)
+  } catch (error) {
+    console.error(`Failed to delete old subscription ${existing.id}:`, error)
+  }
+
+  const renewed: TrackedSubscription = {
+    id: newSubscriptionInfo.id,
+    receiveFrom: newSubscriptionInfo.receiveFrom,
+    topic: existing.topic,
+    status: 'active',
+    createdAt: newCreatedAt,
+    endAt: newEndAt,
+  }
+
+  subscriptions[index] = renewed
+  return renewed
+}
