@@ -260,5 +260,81 @@ describe('processInbox', () => {
 
       expect(result).toEqual({ processed: 2, skipped: 1 })
     })
+
+    it('should retry on terminated error and succeed on second attempt', async () => {
+      const inboxTurtle = `@prefix ldp: <http://www.w3.org/ns/ldp#>.
+<> a ldp:Container, ldp:BasicContainer;
+   ldp:contains <https://example.com/inbox/activity1>.
+<https://example.com/inbox/activity1> a ldp:Resource.`
+
+      const terminatedError = new TypeError('terminated')
+      mockFetch
+        .mockRejectedValueOnce(terminatedError)
+        .mockResolvedValueOnce(
+          new Response(inboxTurtle, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
+
+      const handleFn = vi.fn()
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      const result = await processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+
+      expect(result).toEqual({ processed: 1, skipped: 0 })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('should retry on server error and succeed on second attempt', async () => {
+      const inboxTurtle = `@prefix ldp: <http://www.w3.org/ns/ldp#>.
+<> a ldp:Container, ldp:BasicContainer;
+   ldp:contains <https://example.com/inbox/activity1>.
+<https://example.com/inbox/activity1> a ldp:Resource.`
+
+      mockFetch
+        .mockResolvedValueOnce(new Response('', { status: 502 }))
+        .mockResolvedValueOnce(
+          new Response(inboxTurtle, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
+
+      const handleFn = vi.fn()
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      const result = await processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+
+      expect(result).toEqual({ processed: 1, skipped: 0 })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('should fail after max retries', async () => {
+      const terminatedError = new TypeError('terminated')
+      mockFetch.mockRejectedValue(terminatedError)
+
+      const handleFn = vi.fn()
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      await expect(
+        processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+      ).rejects.toThrow('terminated')
+      expect(mockFetch).toHaveBeenCalledTimes(3)
+    })
+
+    it('should not retry on client error (4xx)', async () => {
+      mockFetch.mockResolvedValue(
+        new Response('Not Found', { status: 404 })
+      )
+
+      const handleFn = vi.fn()
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      const result = await processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+
+      expect(result).toEqual({ processed: 0, skipped: 0 })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
   })
 })

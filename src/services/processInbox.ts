@@ -6,13 +6,52 @@ interface ChildResource {
   types: string[]
 }
 
+async function fetchWithRetry(
+  url: string,
+  fetch: SolidFetch,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  let lastError: Error
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options)
+
+      if (response.ok) {
+        return response
+      }
+
+      if (response.status >= 400 && response.status < 500) {
+        return response
+      }
+
+      throw new Error(`HTTP ${response.status}`)
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+
+      if (attempt < maxRetries - 1) {
+        const delay = (1000 * Math.pow(2, attempt)) + (Math.random() * 1000)
+        console.log(`[processInbox] Fetch failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms: ${lastError.message}`)
+        await new Promise(r => setTimeout(r, delay))
+      }
+    }
+  }
+
+  throw lastError!
+}
+
 async function getChildResources(inboxUrl: string, fetch: SolidFetch): Promise<ChildResource[]> {
-  const response = await fetch(inboxUrl, {
-    method: 'GET',
-    headers: {
-      accept: 'text/turtle',
-    },
-  })
+  const response = await fetchWithRetry(
+    inboxUrl,
+    fetch,
+    {
+      method: 'GET',
+      headers: {
+        accept: 'text/turtle',
+      },
+    }
+  )
 
   if (!response.ok) {
     console.error(`[processInbox] Failed to fetch inbox ${inboxUrl}: ${response.status}`)
