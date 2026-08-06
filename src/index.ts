@@ -251,3 +251,26 @@ export async function renewAllSubscriptions(
 
   return renewed
 }
+
+export function startRenewalJob(
+  subscriptions: TrackedSubscription[],
+  sendToUrl: string,
+  fetchFn: SolidFetch
+): () => void {
+  const intervalMinutes = parseInt(process.env.RENEWAL_CHECK_INTERVAL_MINUTES || '15', 10)
+  const intervalMs = intervalMinutes * 60 * 1000
+
+  const handle = setInterval(() => {
+    renewAllSubscriptions(subscriptions, sendToUrl, fetchFn)
+      .then((renewed) => {
+        if (renewed.length > 0) {
+          console.log(`[Renewal] Renewed ${renewed.length} subscription(s): ${renewed.join(', ')}`)
+        }
+      })
+      .catch((error) => {
+        console.error('[Renewal] Error during renewal:', error)
+      })
+  }, intervalMs)
+
+  return () => clearInterval(handle)
+}

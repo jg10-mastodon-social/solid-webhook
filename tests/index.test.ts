@@ -267,6 +267,91 @@ describe('renewSubscription', () => {
   })
 })
 
+describe('startRenewalJob', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    nextSubId = 1
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const buildReg = (topic: string): WebhookRegistration => ({
+    handler: 'InboxModified',
+    topic,
+    callback: async () => {},
+  })
+
+  it('should renew near-expiry subscriptions at the configured interval', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, startRenewalJob } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    const originalId = subs[0].id
+    subs[0].endAt = new Date(Date.now() + 60 * 60 * 1000)
+
+    vi.clearAllMocks()
+    setupSubscribeAndDeleteGlobal()
+
+    process.env.RENEWAL_CHECK_INTERVAL_MINUTES = '1'
+    const stop = startRenewalJob(subs, 'https://pod.example.com/webhook/', mockFetch as unknown as SolidFetch)
+
+    expect(subs[0].id).toBe(originalId)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(subs[0].id).not.toBe(originalId)
+
+    const afterFirst = subs[0].id
+    subs[0].endAt = new Date(Date.now() + 60 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(subs[0].id).not.toBe(afterFirst)
+
+    stop()
+    const afterStop = subs[0].id
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(subs[0].id).toBe(afterStop)
+
+    delete process.env.RENEWAL_CHECK_INTERVAL_MINUTES
+  })
+
+  it('should use 15 minute default when RENEWAL_CHECK_INTERVAL_MINUTES is not set', async () => {
+    setupSuccessfulSubscribeMock()
+
+    const { subscribeAll, startRenewalJob } = await import('../src/index.js')
+
+    const subs = await subscribeAll(
+      [buildReg('https://pod.example.com/inbox/')],
+      mockFetch as unknown as SolidFetch,
+      'https://pod.example.com/webhook/'
+    )
+
+    delete process.env.RENEWAL_CHECK_INTERVAL_MINUTES
+    subs[0].endAt = new Date(Date.now() + 60 * 60 * 1000)
+
+    vi.clearAllMocks()
+    setupSubscribeAndDeleteGlobal()
+
+    const stop = startRenewalJob(subs, 'https://pod.example.com/webhook/', mockFetch as unknown as SolidFetch)
+
+    const originalId = subs[0].id
+    await vi.advanceTimersByTimeAsync(14 * 60 * 1000)
+    expect(subs[0].id).toBe(originalId)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(subs[0].id).not.toBe(originalId)
+
+    stop()
+  })
+})
+
 describe('renewAllSubscriptions', () => {
   beforeEach(() => {
     vi.clearAllMocks()

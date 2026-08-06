@@ -2,7 +2,7 @@ import { loadConfig, parseWebhooksFromRDF } from './config.js'
 import { createSolidFetch } from './services/solidFetch.js'
 import { handleInboxModified } from './handlers/inboxModified.js'
 import { handleUpdateWebhooks } from './handlers/updateWebhooks.js'
-import { createApp, startServer, subscribeAll, unsubscribeAll } from './index.js'
+import { createApp, startServer, subscribeAll, unsubscribeAll, startRenewalJob } from './index.js'
 import { processExistingInboxItems } from './services/processInbox.js'
 import type { SolidFetch, WebhookRegistration, UpdateWebhooksWebhook } from './types/index.js'
 
@@ -182,6 +182,13 @@ export async function main(): Promise<void> {
   const activeCount = subscriptions.filter(s => s.status === 'active').length
   console.log(`Subscribed to ${activeCount}/${subscriptions.length + failedSubscriptions.length} webhook channels`)
 
+  const stopRenewalJob = startRenewalJob(
+    app.context.subscriptions,
+    config.sendToUrl,
+    fetchFn
+  )
+  console.log(`Renewal job started (interval: ${process.env.RENEWAL_CHECK_INTERVAL_MINUTES || 15} minutes)`)
+
   console.log(`Solid Webhook server running on port ${config.port}`)
 
   console.log('Processing existing inbox items in background...')
@@ -198,6 +205,7 @@ export async function main(): Promise<void> {
 
   const shutdown = async () => {
     console.log('Shutting down...')
+    stopRenewalJob()
     await unsubscribeAll(subscriptions, fetchFn)
     server.close()
     process.exit(0)
