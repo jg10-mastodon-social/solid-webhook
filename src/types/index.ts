@@ -53,8 +53,10 @@ export interface TrackedSubscription {
   id: string
   receiveFrom: string
   topic: string
-  status: 'active' | 'failed'
+  status: 'active' | 'failed' | 'renewing'
   error?: string
+  createdAt?: Date
+  endAt?: Date
 }
 
 export interface WebhookEvent {

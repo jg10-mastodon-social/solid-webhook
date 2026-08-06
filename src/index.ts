@@ -126,17 +126,24 @@ export async function subscribeAll(
   sendToUrl: string
 ): Promise<TrackedSubscription[]> {
   const subscriptions: TrackedSubscription[] = []
+  const durationMinutes = parseInt(process.env.SUBSCRIPTION_DURATION_MINUTES || '10080', 10)
+  const durationMs = durationMinutes * 60 * 1000
 
   for (const reg of registrations) {
+    const createdAt = new Date()
+    const endAt = new Date(createdAt.getTime() + durationMs)
     try {
       const subscription = await subscribeWebhookChannel(
         reg.topic,
         sendToUrl,
-        fetchFn
+        fetchFn,
+        endAt
       )
       subscriptions.push({
         ...subscription,
         status: 'active',
+        createdAt,
+        endAt,
       })
     } catch (error) {
       console.error(`Failed to subscribe to ${reg.topic}:`, error)
@@ -146,6 +153,8 @@ export async function subscribeAll(
         topic: reg.topic,
         status: 'failed',
         error: error instanceof Error ? error.message : 'Unknown error',
+        createdAt,
+        endAt,
       })
     }
   }
