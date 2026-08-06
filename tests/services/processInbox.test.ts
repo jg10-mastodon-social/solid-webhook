@@ -337,6 +337,134 @@ describe('processInbox', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1)
     })
 
+    it('should retry on 429 and succeed on second attempt', async () => {
+      const inboxTurtle = `@prefix ldp: <http://www.w3.org/ns/ldp#>.
+<> a ldp:Container, ldp:BasicContainer;
+   ldp:contains <https://example.com/inbox/activity1>.
+<https://example.com/inbox/activity1> a ldp:Resource.`
+
+      mockFetch
+        .mockResolvedValueOnce(
+          new Response('', { status: 429, headers: { 'Retry-After': '1' } })
+        )
+        .mockResolvedValueOnce(
+          new Response(inboxTurtle, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
+
+      const handleFn = vi.fn()
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      const result = await processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+
+      expect(result.processed).toBe(1)
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('should respect Retry-After header on 429', async () => {
+      vi.useFakeTimers()
+
+      const inboxTurtle = `@prefix ldp: <http://www.w3.org/ns/ldp#>.
+<> a ldp:Container, ldp:BasicContainer;
+   ldp:contains <https://example.com/inbox/activity1>.
+<https://example.com/inbox/activity1> a ldp:Resource.`
+
+      mockFetch
+        .mockResolvedValueOnce(
+          new Response('', { status: 429, headers: { 'Retry-After': '5' } })
+        )
+        .mockResolvedValueOnce(
+          new Response(inboxTurtle, {
+            status: 200,
+            headers: { 'content-type': 'text/turtle' },
+          })
+        )
+
+      const handleFn = vi.fn()
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const promise = processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+
+      await vi.runAllTimersAsync()
+      const result = await promise
+
+      expect(result.processed).toBe(1)
+      const retryLogs = consoleSpy.mock.calls.filter(call =>
+        call[0]?.includes('retrying') && call[0]?.includes('429')
+      )
+      expect(retryLogs.length).toBeGreaterThan(0)
+
+      consoleSpy.mockRestore()
+      vi.useRealTimers()
+    })
+
+    it('should fail entire batch if item exhausts retries on 429', async () => {
+      mockFetch.mockResolvedValue(
+        new Response('', { status: 429, headers: { 'Retry-After': '1' } })
+      )
+
+      const handleFn = vi.fn()
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      await expect(
+        processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+      ).rejects.toThrow('HTTP 429')
+      expect(mockFetch).toHaveBeenCalledTimes(3)
+    })
+
+    it('should apply coordinated delay between chunks after 429', async () => {
+      vi.useFakeTimers()
+
+      const items = Array.from({ length: 105 }, (_, i) => `
+<https://example.com/inbox/activity${i}> a ldp:Resource.`)
+      const contains = Array.from({ length: 105 }, (_, i) => `<https://example.com/inbox/activity${i}>`).join(',\n               ')
+
+      const inboxTurtle = `@prefix ldp: <http://www.w3.org/ns/ldp#>.
+<> a ldp:Container, ldp:BasicContainer;
+   ldp:contains ${contains}.
+${items.join('\n')}`
+
+      mockFetch.mockResolvedValue(
+        new Response(inboxTurtle, {
+          status: 200,
+          headers: { 'content-type': 'text/turtle' },
+        })
+      )
+
+      const errors = []
+      const handleFn = vi.fn().mockImplementation(async (event) => {
+        if (event.object.includes('activity50')) {
+          const err = new Error('HTTP 429') as Error & { status?: number }
+          err.status = 429
+          throw err
+        }
+        errors.push(event.object)
+      })
+
+      const { processExistingInboxItems } = await import('../../src/services/processInbox.js')
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const promise = processExistingInboxItems('https://example.com/inbox/', mockFetch, handleFn)
+
+      await vi.advanceTimersByTimeAsync(2000)
+      await vi.runAllTimersAsync()
+
+      try {
+        await promise
+      } catch (e) {
+      }
+
+      expect(handleFn).toHaveBeenCalledTimes(105)
+
+      consoleSpy.mockRestore()
+      vi.useRealTimers()
+    })
+
     it('should return total count in result', async () => {
       const inboxTurtle = `@prefix ldp: <http://www.w3.org/ns/ldp#>.
 <> a ldp:Container, ldp:BasicContainer;

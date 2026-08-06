@@ -6,43 +6,89 @@ interface ChildResource {
   types: string[]
 }
 
+interface RetryInfo {
+  retryAfter: number | null
+}
+
+interface RetryableError {
+  message: string
+  status?: number
+  retryAfterSeconds?: number | null
+}
+
 async function fetchWithRetry(
   url: string,
   fetch: SolidFetch,
   options: RequestInit,
   maxRetries = 3
-): Promise<Response> {
-  let lastError: Error
+): Promise<{ response: Response; retryAfterSeconds: number | null }> {
+  let lastError: RetryableError = { message: '' }
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await fetch(url, options)
 
       if (response.ok) {
-        return response
+        return { response, retryAfterSeconds: null }
+      }
+
+      if (response.status === 429) {
+        const retryAfterHeader = response.headers.get('Retry-After')
+        let retryAfterSeconds: number | null = null
+
+        if (retryAfterHeader) {
+          retryAfterSeconds = parseRetryAfter(retryAfterHeader)
+        }
+
+        const err: RetryableError = {
+          message: `HTTP 429`,
+          status: 429,
+          retryAfterSeconds,
+        }
+        throw err
       }
 
       if (response.status >= 400 && response.status < 500) {
-        return response
+        return { response, retryAfterSeconds: null }
       }
 
-      throw new Error(`HTTP ${response.status}`)
+      throw { message: `HTTP ${response.status}` }
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error))
+      const err = error as RetryableError
+      lastError = err
 
       if (attempt < maxRetries - 1) {
-        const delay = (1000 * Math.pow(2, attempt)) + (Math.random() * 1000)
-        console.log(`[processInbox] Fetch failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms: ${lastError.message}`)
+        let delay: number
+        if (err.status === 429 && err.retryAfterSeconds) {
+          delay = err.retryAfterSeconds * 1000
+        } else {
+          delay = (1000 * Math.pow(2, attempt)) + (Math.random() * 1000)
+        }
+        console.log(`[processInbox] Fetch failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms: ${err.message}`)
         await new Promise(r => setTimeout(r, delay))
       }
     }
   }
 
-  throw lastError!
+  throw new Error(lastError.message)
+}
+
+function parseRetryAfter(header: string): number | null {
+  const seconds = parseInt(header, 10)
+  if (!isNaN(seconds)) {
+    return seconds
+  }
+
+  const date = new Date(header)
+  if (!isNaN(date.getTime())) {
+    return Math.floor((date.getTime() - Date.now()) / 1000)
+  }
+
+  return null
 }
 
 async function getChildResources(inboxUrl: string, fetch: SolidFetch): Promise<ChildResource[]> {
-  const response = await fetchWithRetry(
+  const { response } = await fetchWithRetry(
     inboxUrl,
     fetch,
     {
