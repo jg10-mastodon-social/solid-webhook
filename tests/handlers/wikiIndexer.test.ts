@@ -129,6 +129,115 @@ describe('WikiIndexer', () => {
     })
   })
 
+  describe('applyIndexInsert', () => {
+    it('batches multiple files into a single INSERT DATA PATCH', async () => {
+      const { applyIndexInsert } = await import('../../src/handlers/wikiIndexer.js')
+
+      mockFetch.mockResolvedValueOnce({ ok: true })
+
+      const result = await applyIndexInsert(
+        'https://pod.example.com/index.ttl',
+        [
+          'https://pod.example.com/wiki/first-file.md',
+          'https://pod.example.com/wiki/second_file.md',
+        ],
+        mockFetch
+      )
+
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+
+      const [url, init] = mockFetch.mock.calls[0]
+      expect(url).toBe('https://pod.example.com/index.ttl')
+      expect(init.method).toBe('PATCH')
+      expect(init.headers['content-type']).toBe('application/sparql-update')
+      expect(init.body).toContain('INSERT DATA')
+      expect(init.body).toContain('<https://pod.example.com/wiki/first-file.md>')
+      expect(init.body).toContain('"First File"')
+      expect(init.body).toContain('<https://pod.example.com/wiki/second_file.md>')
+      expect(init.body).toContain('"Second File"')
+    })
+  })
+
+  describe('applyIndexDelete', () => {
+    it('batches multiple files into a single DELETE DATA PATCH', async () => {
+      const { applyIndexDelete } = await import('../../src/handlers/wikiIndexer.js')
+
+      mockFetch.mockResolvedValueOnce({ ok: true })
+
+      const result = await applyIndexDelete(
+        'https://pod.example.com/index.ttl',
+        [
+          'https://pod.example.com/wiki/first-file.md',
+          'https://pod.example.com/wiki/second_file.md',
+        ],
+        mockFetch
+      )
+
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+
+      const [url, init] = mockFetch.mock.calls[0]
+      expect(url).toBe('https://pod.example.com/index.ttl')
+      expect(init.method).toBe('PATCH')
+      expect(init.headers['content-type']).toBe('application/sparql-update')
+      expect(init.body).toContain('DELETE DATA')
+      expect(init.body).toContain('<https://pod.example.com/wiki/first-file.md>')
+      expect(init.body).toContain('<https://pod.example.com/wiki/second_file.md>')
+    })
+  })
+
+  describe('deleteIndexSubtree', () => {
+    const indexUrl = 'https://pod.example.com/index.ttl'
+    const containerUrl = 'https://pod.example.com/wiki/topics/'
+
+    it('deletes only labels whose subject is under the container', async () => {
+      const { deleteIndexSubtree } = await import('../../src/handlers/wikiIndexer.js')
+
+      const turtle = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<https://pod.example.com/wiki/topics/page.md> rdfs:label "Page" .
+<https://pod.example.com/wiki/topics/nested/deep.md> rdfs:label "Deep" .
+<https://pod.example.com/wiki/topics-other/page.md> rdfs:label "Other Page" .
+<https://pod.example.com/wiki/root.md> rdfs:label "Root" .
+`
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, text: async () => turtle })
+        .mockResolvedValueOnce({ ok: true })
+
+      const result = await deleteIndexSubtree(indexUrl, containerUrl, mockFetch)
+
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+
+      const [getUrl, getInit] = mockFetch.mock.calls[0]
+      expect(getUrl).toBe(indexUrl)
+      expect(getInit.method).toBe('GET')
+      expect(getInit.headers.accept).toBe('text/turtle')
+
+      const [patchUrl, patchInit] = mockFetch.mock.calls[1]
+      expect(patchUrl).toBe(indexUrl)
+      expect(patchInit.method).toBe('PATCH')
+      expect(patchInit.body).toContain('DELETE DATA')
+      expect(patchInit.body).toContain('<https://pod.example.com/wiki/topics/page.md>')
+      expect(patchInit.body).toContain('<https://pod.example.com/wiki/topics/nested/deep.md>')
+      expect(patchInit.body).not.toContain('<https://pod.example.com/wiki/topics-other/page.md>')
+      expect(patchInit.body).not.toContain('<https://pod.example.com/wiki/root.md>')
+    })
+
+    it('returns false and does not PATCH when the index GET is not ok', async () => {
+      const { deleteIndexSubtree } = await import('../../src/handlers/wikiIndexer.js')
+
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404 })
+
+      const result = await deleteIndexSubtree(indexUrl, containerUrl, mockFetch)
+
+      expect(result).toBe(false)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockFetch.mock.calls[0][1].method).toBe('GET')
+    })
+  })
+
   describe('basenameToTitle', () => {
     it('converts kebab-case to Title Case', async () => {
       const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
@@ -148,6 +257,16 @@ describe('WikiIndexer', () => {
     it('handles filename without extension', async () => {
       const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
       expect(basenameToTitle('my-file')).toBe('My File')
+    })
+
+    it('decodes percent-encoded filenames', async () => {
+      const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
+      expect(basenameToTitle('water%20quality.md')).toBe('Water Quality')
+    })
+
+    it('keeps already-decoded filenames unchanged', async () => {
+      const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
+      expect(basenameToTitle('water quality.md')).toBe('Water Quality')
     })
   })
 })
