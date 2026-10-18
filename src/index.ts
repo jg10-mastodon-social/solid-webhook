@@ -6,6 +6,7 @@ import { solidIdentity } from '@soid/koa'
 import { createSolidAuthMiddleware } from './middleware/solidAuth.js'
 import { createAdminAuthMiddleware } from './middleware/adminAuth.js'
 import { subscribeWebhookChannel, unsubscribeWebhookChannel } from './services/webhookChannel.js'
+import { subscribeTracked } from './services/subscriptions.js'
 import type { Config, WebhookRegistration, TrackedSubscription } from './types/index.js'
 import type { SolidFetch } from './types/index.js'
 
@@ -133,18 +134,8 @@ export async function subscribeAll(
     const createdAt = new Date()
     const endAt = new Date(createdAt.getTime() + durationMs)
     try {
-      const subscription = await subscribeWebhookChannel(
-        reg.topic,
-        sendToUrl,
-        fetchFn,
-        endAt
-      )
-      subscriptions.push({
-        ...subscription,
-        status: 'active',
-        createdAt,
-        endAt,
-      })
+      const subscription = await subscribeTracked(reg.topic, sendToUrl, fetchFn)
+      subscriptions.push(subscription)
     } catch (error) {
       console.error(`Failed to subscribe to ${reg.topic}:`, error)
       subscriptions.push({
