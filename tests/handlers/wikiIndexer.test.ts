@@ -1,5 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { WebhookEvent, WikiIndexerWebhook } from '../../src/types/index.js'
+import type { WebhookEvent, WikiIndexerWebhook, TrackedSubscription } from '../../src/types/index.js'
+import { discoverWikiContainers } from '../../src/services/wikiContainers.js'
+import { subscribeTracked } from '../../src/services/subscriptions.js'
+import { unsubscribeWebhookChannel } from '../../src/services/webhookChannel.js'
+
+vi.mock('../../src/services/wikiContainers.js', () => ({
+  discoverWikiContainers: vi.fn(),
+}))
+vi.mock('../../src/services/subscriptions.js', () => ({
+  subscribeTracked: vi.fn(),
+}))
+vi.mock('../../src/services/webhookChannel.js', () => ({
+  unsubscribeWebhookChannel: vi.fn(),
+}))
+
+const WIKI_ROOT = 'https://pod.example.com/notes/mashlib/'
+const WIKI_INDEX = 'https://pod.example.com/notes/mashlib/index.ttl'
+const SEND_TO = 'https://app.example.com/webhook'
+
+function wikiRegistration(overrides: Partial<WikiIndexerWebhook> = {}): WikiIndexerWebhook {
+  return {
+    handler: 'WikiIndexer',
+    topic: WIKI_ROOT,
+    indexUrl: WIKI_INDEX,
+    maxDepth: 1,
+    callback: vi.fn(),
+    ...overrides,
+  }
+}
+
+function tracked(id: string, topic: string): TrackedSubscription {
+  return { id, receiveFrom: `${topic}receive`, topic, status: 'active' }
+}
 
 const mockFetch = vi.fn()
 const mockContext = {
@@ -267,6 +299,203 @@ describe('WikiIndexer', () => {
     it('keeps already-decoded filenames unchanged', async () => {
       const { basenameToTitle } = await import('../../src/handlers/wikiIndexer.js')
       expect(basenameToTitle('water quality.md')).toBe('Water Quality')
+    })
+  })
+
+  describe('container recursion', () => {
+    it('selects the longest matching registration prefix', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      mockFetch.mockResolvedValueOnce({ ok: true })
+
+      const context = {
+        registrations: [
+          wikiRegistration({
+            topic: 'https://pod.example.com/notes/',
+            indexUrl: 'https://pod.example.com/notes/index.ttl',
+          }),
+          wikiRegistration(),
+        ],
+        subscriptions: [] as TrackedSubscription[],
+        sendToUrl: SEND_TO,
+      }
+
+      const event: WebhookEvent = {
+        type: 'Add',
+        object: `${WIKI_ROOT}my-file.md`,
+        topic: WIKI_ROOT,
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, context as any)
+
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenCalledWith(
+        WIKI_INDEX,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.stringContaining('INSERT DATA'),
+        })
+      )
+    })
+
+    it('subscribes and backfills when a child container is added within maxDepth', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      const container = `${WIKI_ROOT}newcontainer/`
+      const page = `${container}page.md`
+
+      vi.mocked(discoverWikiContainers).mockResolvedValueOnce({
+        containers: [container],
+        markdownFiles: [page],
+      })
+      vi.mocked(subscribeTracked).mockResolvedValueOnce(tracked('sub-1', container))
+      mockFetch.mockResolvedValueOnce({ ok: true })
+
+      const context = {
+        registrations: [wikiRegistration()],
+        subscriptions: [] as TrackedSubscription[],
+        sendToUrl: SEND_TO,
+      }
+
+      const event: WebhookEvent = {
+        type: 'Add',
+        object: container,
+        topic: WIKI_ROOT,
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, context as any)
+
+      expect(result).toBe(true)
+      expect(discoverWikiContainers).toHaveBeenCalledWith(container, 0, mockFetch)
+      expect(subscribeTracked).toHaveBeenCalledWith(container, SEND_TO, mockFetch)
+      expect(context.subscriptions).toHaveLength(1)
+      expect(context.subscriptions[0].topic).toBe(container)
+      expect(mockFetch).toHaveBeenCalledWith(
+        WIKI_INDEX,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.stringContaining(page),
+        })
+      )
+    })
+
+    it('does not subscribe or backfill when the container is beyond maxDepth', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      const container = `${WIKI_ROOT}one/two/`
+
+      const context = {
+        registrations: [wikiRegistration({ maxDepth: 1 })],
+        subscriptions: [] as TrackedSubscription[],
+        sendToUrl: SEND_TO,
+      }
+
+      const event: WebhookEvent = {
+        type: 'Add',
+        object: container,
+        topic: WIKI_ROOT,
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, context as any)
+
+      expect(result).toBe(false)
+      expect(discoverWikiContainers).not.toHaveBeenCalled()
+      expect(subscribeTracked).not.toHaveBeenCalled()
+      expect(mockFetch).not.toHaveBeenCalled()
+      expect(context.subscriptions).toHaveLength(0)
+    })
+
+    it('does not duplicate an active subscription but still backfills', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      const container = `${WIKI_ROOT}existing/`
+      const page = `${container}page.md`
+
+      vi.mocked(discoverWikiContainers).mockResolvedValueOnce({
+        containers: [container],
+        markdownFiles: [page],
+      })
+      mockFetch.mockResolvedValueOnce({ ok: true })
+
+      const context = {
+        registrations: [wikiRegistration()],
+        subscriptions: [tracked('sub-existing', container)],
+        sendToUrl: SEND_TO,
+      }
+
+      const event: WebhookEvent = {
+        type: 'Add',
+        object: container,
+        topic: WIKI_ROOT,
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, context as any)
+
+      expect(result).toBe(true)
+      expect(subscribeTracked).not.toHaveBeenCalled()
+      expect(context.subscriptions).toHaveLength(1)
+      expect(mockFetch).toHaveBeenCalledWith(
+        WIKI_INDEX,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.stringContaining(page),
+        })
+      )
+    })
+
+    it('unsubscribes container and descendants and deletes subtree labels on removal', async () => {
+      const { handleWikiIndexer } = await import('../../src/handlers/wikiIndexer.js')
+
+      const container = `${WIKI_ROOT}oldcontainer/`
+      const page = `${container}page.md`
+      const turtle = `<${page}> <http://www.w3.org/2000/01/rdf-schema#label> "Page" .`
+
+      vi.mocked(unsubscribeWebhookChannel).mockResolvedValue(undefined)
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, text: async () => turtle })
+        .mockResolvedValueOnce({ ok: true })
+
+      const other = tracked('sub-other', `${WIKI_ROOT}other/`)
+      const subscriptions = [
+        tracked('sub-1', container),
+        tracked('sub-2', `${container}child/`),
+        other,
+        tracked('', `${container}noid/`),
+      ]
+      const context = {
+        registrations: [wikiRegistration()],
+        subscriptions,
+        sendToUrl: SEND_TO,
+      }
+
+      const event: WebhookEvent = {
+        type: 'Remove',
+        object: container,
+        topic: WIKI_ROOT,
+        raw: {},
+      }
+
+      const result = await handleWikiIndexer(event, mockFetch, context as any)
+
+      expect(result).toBe(true)
+      expect(unsubscribeWebhookChannel).toHaveBeenCalledWith('sub-1', mockFetch)
+      expect(unsubscribeWebhookChannel).toHaveBeenCalledWith('sub-2', mockFetch)
+      expect(unsubscribeWebhookChannel).not.toHaveBeenCalledWith('', mockFetch)
+      expect(unsubscribeWebhookChannel).not.toHaveBeenCalledWith('sub-other', mockFetch)
+      expect(context.subscriptions).toBe(subscriptions)
+      expect(context.subscriptions.map(sub => sub.topic)).toEqual([`${WIKI_ROOT}other/`])
+      expect(mockFetch).toHaveBeenCalledWith(
+        WIKI_INDEX,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.stringContaining(page),
+        })
+      )
     })
   })
 })
