@@ -65,12 +65,13 @@ npm run typecheck  # Check TypeScript
 
 ## Architecture
 
+- `src/main.ts` - CLI entry point and startup sequence (createApp → startServer → createSolidFetch → fetch config → subscribe)
 - `src/index.ts` - Koa server with identity endpoints and subscription management
+- `src/config.ts` - Environment variable loading and RDF webhook parsing
 - `src/middleware/solidAuth.ts` - DPoP token verification using @solid/access-token-verifier
 - `src/services/webhookChannel.ts` - WebhookChannel2023 subscription/unsubscription
 - `src/services/solidFetch.ts` - Authenticated fetch using @soid/koa
-- `src/handlers/inboxModified.ts` - Inbox event processing
-- `src/config.ts` - Environment variable loading and RDF webhook parsing
+- `src/handlers/` - Webhook event handlers
 - `src/types/index.ts` - TypeScript interfaces
 
 ## Identity Endpoints
