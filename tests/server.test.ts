@@ -562,5 +562,112 @@ describe('Koa Server', () => {
         raw: webhookBody,
       })
     })
+
+    it('should select the longest matching topic prefix', async () => {
+      const { createApp, startServer } = await import('../src/index.js')
+      const rootCallback = vi.fn()
+      const specificCallback = vi.fn()
+      const app = await createApp({
+        webId: 'https://pod.example.com/profile/card#me',
+        issuer: 'https://pod.example.com',
+        webhookEndpoint: '/webhook',
+        port: 8097,
+        sendToUrl: 'https://pod.example.com/webhook/',
+        whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8097',
+        adminWebId: 'https://pod.example.com/profile/card#me',
+      })
+
+      app.context.registrations = [
+        {
+          topic: 'https://pod.example.com/wiki/',
+          handler: 'WikiIndexer',
+          callback: rootCallback,
+          indexUrl: 'https://pod.example.com/wiki/index.ttl',
+          maxDepth: 3,
+          actor: 'https://pod.example.com/actor',
+        },
+        {
+          topic: 'https://pod.example.com/wiki/topics/',
+          handler: 'WikiIndexer',
+          callback: specificCallback,
+          indexUrl: 'https://pod.example.com/wiki/topics/index.ttl',
+          maxDepth: 3,
+          actor: 'https://pod.example.com/actor',
+        },
+      ]
+
+      server = await startServer(app, 8097)
+
+      const response = await fetch('http://localhost:8097/webhook', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          dpop: 'test-dpop-header',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'Add',
+          object: 'https://pod.example.com/wiki/topics/abc',
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      expect(specificCallback).toHaveBeenCalledTimes(1)
+      expect(rootCallback).not.toHaveBeenCalled()
+      const callArgs = specificCallback.mock.calls[0]
+      expect(callArgs[0]).toMatchObject({
+        type: 'Add',
+        object: 'https://pod.example.com/wiki/topics/abc',
+        topic: 'https://pod.example.com/wiki/topics/',
+      })
+    })
+
+    it('should forward Update events unchanged', async () => {
+      const { createApp, startServer } = await import('../src/index.js')
+      const callback = vi.fn()
+      const app = await createApp({
+        webId: 'https://pod.example.com/profile/card#me',
+        issuer: 'https://pod.example.com',
+        webhookEndpoint: '/webhook',
+        port: 8098,
+        sendToUrl: 'https://pod.example.com/webhook/',
+        whitelistedIssuers: ['https://pod.example.com'],
+        webhookConfigUrl: 'https://pod.example.com/webhooks.ttl',
+        handlerBaseUrl: 'https://pod.example.com/handlers#',
+        baseUrl: 'http://localhost:8098',
+        adminWebId: 'https://pod.example.com/profile/card#me',
+      })
+
+      app.context.registrations = [{
+        topic: 'https://pod.example.com/inbox/',
+        handler: 'InboxModified',
+        callback,
+        actor: 'https://pod.example.com/actor',
+      }]
+
+      server = await startServer(app, 8098)
+
+      const response = await fetch('http://localhost:8098/webhook', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          dpop: 'test-dpop-header',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'Update', object: 'https://pod.example.com/inbox/abc' }),
+      })
+
+      expect(response.status).toBe(200)
+      expect(callback).toHaveBeenCalledTimes(1)
+      const callArgs = callback.mock.calls[0]
+      expect(callArgs[0]).toMatchObject({
+        type: 'Update',
+        object: 'https://pod.example.com/inbox/abc',
+        topic: 'https://pod.example.com/inbox/',
+      })
+    })
   })
 })

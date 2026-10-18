@@ -51,13 +51,15 @@ export async function createApp(config: Config): Promise<Koa> {
     const registrations = ctx.app.context.registrations
 
     if (registrations) {
-      const matchingReg = registrations.find((reg) => {
-        return typeof body.object === 'string' && body.object.startsWith(reg.topic)
-      })
+      const matchingReg = registrations
+        .filter((reg) => {
+          return typeof body.object === 'string' && body.object.startsWith(reg.topic)
+        })
+        .sort((a, b) => b.topic.length - a.topic.length)[0]
 
       if (matchingReg) {
         await matchingReg.callback({
-          type: body.type as 'Add' | 'Remove',
+          type: body.type as 'Add' | 'Remove' | 'Update',
           object: body.object as string,
           topic: matchingReg.topic,
           raw: body,
