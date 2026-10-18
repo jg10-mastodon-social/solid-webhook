@@ -74,6 +74,16 @@ npm run typecheck  # Check TypeScript
 - `src/handlers/` - Webhook event handlers
 - `src/types/index.ts` - TypeScript interfaces
 
+## Wiki Indexer
+
+`WikiIndexer` writes page labels to an RDF index. Solid notifications only cover
+direct children of a subscribed container, so the server discovers descendant
+containers at startup and subscribes to new ones as they are added.
+
+`:maxDepth` controls how deep the indexer watches: `0` indexes root-level pages
+only, `1` (the default) includes immediate subfolders, and higher values add
+more levels. See `docs/webhooks.ttl.example` for a configuration example.
+
 ## Identity Endpoints
 
 The server uses solidIdentity from @soid/koa to provide identity routes. Custom endpoints:

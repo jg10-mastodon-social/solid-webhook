@@ -16,3 +16,14 @@
   :topic <https://pod.example.com/.git/COMMIT_EDITMSG>;
   :handler :CommitHandler;
   :gitDir "/path/to/local/repo" .
+
+# Index markdown pages under a wiki container.
+# :maxDepth controls how many container levels are watched:
+#   0 = root pages only
+#   1 = root plus immediate subfolders (default)
+#   2 = root plus two levels of subfolders, and so on
+:wikiWebhook a :WebHook;
+  :topic <https://pod.example.com/notes/wiki/>;
+  :handler :WikiIndexer;
+  :indexUrl <https://pod.example.com/notes/wiki/index.ttl>;
+  :maxDepth 1 .
