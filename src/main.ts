@@ -4,6 +4,7 @@ import { handleInboxModified } from './handlers/inboxModified.js'
 import { handleUpdateWebhooks } from './handlers/updateWebhooks.js'
 import { createApp, startServer, subscribeAll, unsubscribeAll, startRenewalJob } from './index.js'
 import { processExistingInboxItems } from './services/processInbox.js'
+import { initializeWikiIndexers } from './services/wikiIndexerInit.js'
 import type { SolidFetch, WebhookRegistration, UpdateWebhooksWebhook } from './types/index.js'
 
 const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, fetch: SolidFetch, context: any) => void | Promise<void>> = {
@@ -183,6 +184,9 @@ export async function main(): Promise<void> {
   const activeCount = subscriptions.filter(s => s.status === 'active').length
   console.log(`Subscribed to ${activeCount}/${subscriptions.length + failedSubscriptions.length} webhook channels`)
 
+  console.log('Initializing WikiIndexer subscriptions...')
+  await initializeWikiIndexers(app.context, fetchFn)
+
   const stopRenewalJob = startRenewalJob(
     app.context.subscriptions,
     config.sendToUrl,
@@ -207,7 +211,7 @@ export async function main(): Promise<void> {
   const shutdown = async () => {
     console.log('Shutting down...')
     stopRenewalJob()
-    await unsubscribeAll(subscriptions, fetchFn)
+    await unsubscribeAll(app.context.subscriptions ?? [], fetchFn)
     server.close()
     process.exit(0)
   }
