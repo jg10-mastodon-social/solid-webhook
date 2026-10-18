@@ -31,20 +31,22 @@ See `README.md` for architecture, key files, and usage.
 
 ## Subagent Delegation
 
-- Delegate each implementation cycle to the `general` subagent via the Task
-  tool. Use `explore` for codebase discovery and `review` for the review step
-  when useful.
+- The orchestrating agent delegates each implementation cycle to the `general`
+  subagent via the Task tool. Use `explore` for codebase discovery and `review`
+  for the review step when useful.
+- Subagents must not delegate further or call the Task tool. Lack of Task access
+  is expected, not a fallback.
 - The delegation prompt must include:
   - the cycle goal and the context already present in the repo;
   - the exact red test(s) to write first and why they fail;
   - the files in bounds (and files that are off limits);
   - the commands to observe red then green;
-  - the constraints (no commit, no unrelated edits, repo style);
+  - the constraints (no commit, no subagents, no unrelated edits, repo style);
   - the required report format (files, test results, typecheck, deviations).
 - Subagents must not commit. The orchestrating agent reviews the result and
   commits.
-- Fall back to implementing directly only if the subagent is unavailable, and
-  note the fallback in the final summary.
+- Fall back to implementing directly only if the orchestrating agent cannot
+  spawn a subagent at all, and note the fallback in the final summary.
 
 ## Commit Conventions
 
