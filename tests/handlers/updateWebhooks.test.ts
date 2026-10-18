@@ -12,7 +12,12 @@ vi.mock('../../src/config.js', () => ({
   parseWebhooksFromRDF: vi.fn().mockResolvedValue([]),
 }))
 
+vi.mock('../../src/services/wikiIndexerInit.js', () => ({
+  initializeWikiIndexers: vi.fn(),
+}))
+
 import { parseWebhooksFromRDF } from '../../src/config.js'
+import { initializeWikiIndexers } from '../../src/services/wikiIndexerInit.js'
 
 describe('UpdateWebhooks Handler', () => {
   beforeEach(() => {
@@ -26,6 +31,8 @@ describe('UpdateWebhooks Handler', () => {
     registrations: [] as any[],
     handlers: {
       InboxModified: vi.fn(),
+      CommitHandler: vi.fn(),
+      WikiIndexer: vi.fn(),
     },
     sendToUrl: 'https://example.com/webhook',
     handlerBaseUrl: 'https://example.com/handlers#',
@@ -212,9 +219,176 @@ describe('UpdateWebhooks Handler', () => {
       })
       expect(mockContext.registrations).toHaveLength(1)
       expect(mockContext.registrations[0]).toMatchObject({
+        handler: 'InboxModified',
         topic: 'https://pod.example.com/new-inbox/',
         actor: 'https://pod.example.com/actor#me',
       })
+    })
+
+    it('should register WikiIndexer with indexUrl and explicit maxDepth and initialize', async () => {
+      const { handleUpdateWebhooks } = await import('../../src/handlers/updateWebhooks.js')
+
+      mockFetch.mockResolvedValue(new Response('', { status: 200 }))
+      ;(parseWebhooksFromRDF as any).mockResolvedValue([
+        {
+          topic: 'https://pod.example.com/wiki/',
+          handler: 'WikiIndexer',
+          indexUrl: 'https://pod.example.com/index.ttl',
+          maxDepth: 3,
+        },
+      ])
+
+      mockSubscribeWebhookChannel.mockResolvedValue({
+        id: 'https://example.com/sub/wiki',
+        receiveFrom: 'https://example.com/receive/wiki',
+        topic: 'https://pod.example.com/wiki/',
+      })
+
+      const event: WebhookEvent = {
+        type: 'Update',
+        object: 'https://example.com/config.ttl',
+        topic: 'https://example.com/inbox/',
+        raw: { type: 'Update', object: 'https://example.com/config.ttl' },
+      }
+
+      await handleUpdateWebhooks(event, mockFetch, mockContext)
+
+      expect(mockContext.registrations).toHaveLength(1)
+      expect(mockContext.registrations[0]).toMatchObject({
+        handler: 'WikiIndexer',
+        topic: 'https://pod.example.com/wiki/',
+        indexUrl: 'https://pod.example.com/index.ttl',
+        maxDepth: 3,
+      })
+      expect(initializeWikiIndexers).toHaveBeenCalledWith(mockContext, mockFetch)
+    })
+
+    it('should default WikiIndexer maxDepth to 1 when omitted', async () => {
+      const { handleUpdateWebhooks } = await import('../../src/handlers/updateWebhooks.js')
+
+      mockFetch.mockResolvedValue(new Response('', { status: 200 }))
+      ;(parseWebhooksFromRDF as any).mockResolvedValue([
+        {
+          topic: 'https://pod.example.com/wiki/',
+          handler: 'WikiIndexer',
+          indexUrl: 'https://pod.example.com/index.ttl',
+        },
+      ])
+
+      mockSubscribeWebhookChannel.mockResolvedValue({
+        id: 'https://example.com/sub/wiki',
+        receiveFrom: 'https://example.com/receive/wiki',
+        topic: 'https://pod.example.com/wiki/',
+      })
+
+      const event: WebhookEvent = {
+        type: 'Update',
+        object: 'https://example.com/config.ttl',
+        topic: 'https://example.com/inbox/',
+        raw: { type: 'Update', object: 'https://example.com/config.ttl' },
+      }
+
+      await handleUpdateWebhooks(event, mockFetch, mockContext)
+
+      expect(mockContext.registrations).toHaveLength(1)
+      expect(mockContext.registrations[0]).toMatchObject({
+        handler: 'WikiIndexer',
+        indexUrl: 'https://pod.example.com/index.ttl',
+        maxDepth: 1,
+      })
+      expect(initializeWikiIndexers).toHaveBeenCalledWith(mockContext, mockFetch)
+    })
+
+    it('should fail WikiIndexer registration when indexUrl is missing', async () => {
+      const { handleUpdateWebhooks } = await import('../../src/handlers/updateWebhooks.js')
+
+      mockFetch.mockResolvedValue(new Response('', { status: 200 }))
+      ;(parseWebhooksFromRDF as any).mockResolvedValue([
+        { topic: 'https://pod.example.com/wiki/', handler: 'WikiIndexer' },
+      ])
+
+      const event: WebhookEvent = {
+        type: 'Update',
+        object: 'https://example.com/config.ttl',
+        topic: 'https://example.com/inbox/',
+        raw: { type: 'Update', object: 'https://example.com/config.ttl' },
+      }
+
+      await handleUpdateWebhooks(event, mockFetch, mockContext)
+
+      expect(mockContext.subscriptions).toHaveLength(1)
+      expect(mockContext.subscriptions[0]).toMatchObject({
+        topic: 'https://pod.example.com/wiki/',
+        status: 'failed',
+        error: 'WikiIndexer webhook is missing required :indexUrl',
+      })
+      expect(mockContext.registrations).toHaveLength(0)
+      expect(mockSubscribeWebhookChannel).not.toHaveBeenCalled()
+      expect(initializeWikiIndexers).not.toHaveBeenCalled()
+    })
+
+    it('should register CommitHandler with gitDir and not initialize WikiIndexers', async () => {
+      const { handleUpdateWebhooks } = await import('../../src/handlers/updateWebhooks.js')
+
+      mockFetch.mockResolvedValue(new Response('', { status: 200 }))
+      ;(parseWebhooksFromRDF as any).mockResolvedValue([
+        {
+          topic: 'https://pod.example.com/repo/',
+          handler: 'CommitHandler',
+          gitDir: '/data/repos/example',
+        },
+      ])
+
+      mockSubscribeWebhookChannel.mockResolvedValue({
+        id: 'https://example.com/sub/repo',
+        receiveFrom: 'https://example.com/receive/repo',
+        topic: 'https://pod.example.com/repo/',
+      })
+
+      const event: WebhookEvent = {
+        type: 'Update',
+        object: 'https://example.com/config.ttl',
+        topic: 'https://example.com/inbox/',
+        raw: { type: 'Update', object: 'https://example.com/config.ttl' },
+      }
+
+      await handleUpdateWebhooks(event, mockFetch, mockContext)
+
+      expect(mockContext.registrations).toHaveLength(1)
+      expect(mockContext.registrations[0]).toMatchObject({
+        handler: 'CommitHandler',
+        topic: 'https://pod.example.com/repo/',
+        gitDir: '/data/repos/example',
+      })
+      expect(initializeWikiIndexers).not.toHaveBeenCalled()
+    })
+
+    it('should fail CommitHandler registration when gitDir is missing', async () => {
+      const { handleUpdateWebhooks } = await import('../../src/handlers/updateWebhooks.js')
+
+      mockFetch.mockResolvedValue(new Response('', { status: 200 }))
+      ;(parseWebhooksFromRDF as any).mockResolvedValue([
+        { topic: 'https://pod.example.com/repo/', handler: 'CommitHandler' },
+      ])
+
+      const event: WebhookEvent = {
+        type: 'Update',
+        object: 'https://example.com/config.ttl',
+        topic: 'https://example.com/inbox/',
+        raw: { type: 'Update', object: 'https://example.com/config.ttl' },
+      }
+
+      await handleUpdateWebhooks(event, mockFetch, mockContext)
+
+      expect(mockContext.subscriptions).toHaveLength(1)
+      expect(mockContext.subscriptions[0]).toMatchObject({
+        topic: 'https://pod.example.com/repo/',
+        status: 'failed',
+        error: 'CommitHandler webhook is missing required :gitDir',
+      })
+      expect(mockContext.registrations).toHaveLength(0)
+      expect(mockSubscribeWebhookChannel).not.toHaveBeenCalled()
+      expect(initializeWikiIndexers).not.toHaveBeenCalled()
     })
 
     it('should add subscription with failed status when subscribe fails', async () => {

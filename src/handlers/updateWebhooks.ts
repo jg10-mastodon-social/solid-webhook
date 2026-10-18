@@ -1,6 +1,7 @@
 import { parseWebhooksFromRDF } from '../config.js'
 import { subscribeWebhookChannel } from '../services/webhookChannel.js'
-import type { WebhookEvent, SolidFetch } from '../types/index.js'
+import { initializeWikiIndexers } from '../services/wikiIndexerInit.js'
+import type { WebhookEvent, SolidFetch, HandlerContext } from '../types/index.js'
 
 interface KoaDefaultContext {
   subscriptions: any[]
@@ -41,9 +42,35 @@ export async function handleUpdateWebhooks(
   const parsedWebhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
   console.log(`[UpdateWebhooks] Parsed ${parsedWebhooks.length} webhooks`)
 
+  let wikiIndexerAdded = false
+
   for (const webhook of parsedWebhooks) {
     const exists = subscriptions.some((sub: any) => sub.topic === webhook.topic)
     if (exists) continue
+
+    if (webhook.handler === 'WikiIndexer' && !webhook.indexUrl) {
+      subscriptions.push({
+        id: '',
+        receiveFrom: '',
+        topic: webhook.topic,
+        status: 'failed',
+        error: 'WikiIndexer webhook is missing required :indexUrl',
+      })
+      console.error('[UpdateWebhooks] Error: WikiIndexer webhook is missing required :indexUrl')
+      continue
+    }
+
+    if (webhook.handler === 'CommitHandler' && !webhook.gitDir) {
+      subscriptions.push({
+        id: '',
+        receiveFrom: '',
+        topic: webhook.topic,
+        status: 'failed',
+        error: 'CommitHandler webhook is missing required :gitDir',
+      })
+      console.error('[UpdateWebhooks] Error: CommitHandler webhook is missing required :gitDir')
+      continue
+    }
 
     const handler = handlers[webhook.handler]
     if (!handler) {
@@ -61,11 +88,20 @@ export async function handleUpdateWebhooks(
     try {
       const subscription = await subscribeWebhookChannel(webhook.topic, sendToUrl, fetch)
       subscriptions.push({ ...subscription, status: 'active' })
-      registrations.push({
+      const registration: Record<string, unknown> = {
+        handler: webhook.handler,
         topic: webhook.topic,
         callback: async (evt: WebhookEvent, fet: SolidFetch) => handler(evt, fet, context),
         actor: webhook.actor,
-      })
+      }
+      if (webhook.handler === 'WikiIndexer') {
+        registration.indexUrl = webhook.indexUrl
+        registration.maxDepth = webhook.maxDepth ?? 1
+        wikiIndexerAdded = true
+      } else if (webhook.handler === 'CommitHandler') {
+        registration.gitDir = webhook.gitDir
+      }
+      registrations.push(registration)
       console.log(`[UpdateWebhooks] Subscribed: ${webhook.topic}`)
     } catch (error) {
       subscriptions.push({
@@ -77,6 +113,9 @@ export async function handleUpdateWebhooks(
       })
       console.error(`[UpdateWebhooks] Error: Failed to subscribe ${webhook.topic}: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
+  }
+  if (wikiIndexerAdded) {
+    await initializeWikiIndexers(context as unknown as HandlerContext, fetch)
   }
   console.log('[UpdateWebhooks] completed')
 }
