@@ -7,6 +7,7 @@ export interface ParsedWebhook {
   actor?: string
   gitDir?: string
   indexUrl?: string
+  maxDepth?: number
 }
 
 export function loadConfig(): Config {
@@ -85,6 +86,7 @@ export async function parseWebhooksFromRDF(
         const actorPredicate = `${handlerBaseUrl}actor`
         const gitDirPredicate = `${handlerBaseUrl}gitDir`
         const indexUrlPredicate = `${handlerBaseUrl}indexUrl`
+        const maxDepthPredicate = `${handlerBaseUrl}maxDepth`
         
         for (const quad of webhookQuads) {
           if (
@@ -97,6 +99,7 @@ export async function parseWebhooksFromRDF(
             const actorQuads = store.getQuads(webhookUri, actorPredicate, null, null)
             const gitDirQuads = store.getQuads(webhookUri, gitDirPredicate, null, null)
             const indexUrlQuads = store.getQuads(webhookUri, indexUrlPredicate, null, null)
+            const maxDepthQuads = store.getQuads(webhookUri, maxDepthPredicate, null, null)
 
             if (topicQuads.length > 0 && handlerQuads.length > 0) {
               const topic = topicQuads[0].object.value
@@ -106,8 +109,9 @@ export async function parseWebhooksFromRDF(
               const actor = actorQuads.length > 0 ? actorQuads[0].object.value : undefined
               const gitDir = gitDirQuads.length > 0 ? gitDirQuads[0].object.value : undefined
               const indexUrl = indexUrlQuads.length > 0 ? indexUrlQuads[0].object.value : undefined
+              const maxDepth = maxDepthQuads.length > 0 ? Number(maxDepthQuads[0].object.value) : undefined
 
-              webhooks.push({ topic, handler: handlerName, actor, gitDir, indexUrl })
+              webhooks.push({ topic, handler: handlerName, actor, gitDir, indexUrl, maxDepth })
             }
           }
         }
@@ -166,11 +170,16 @@ export function createWebhookRegistrations(
       if (!pw.indexUrl) {
         throw new Error("WikiIndexer webhook is missing required :indexUrl")
       }
+      const maxDepth = pw.maxDepth ?? 1
+      if (!Number.isInteger(maxDepth) || maxDepth < 0) {
+        throw new Error('WikiIndexer :maxDepth must be a non-negative integer')
+      }
       return {
         handler: 'WikiIndexer' as const,
         topic: pw.topic,
         callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
         indexUrl: pw.indexUrl,
+        maxDepth,
         actor: pw.actor,
       }
     }

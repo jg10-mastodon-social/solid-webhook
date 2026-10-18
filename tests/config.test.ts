@@ -298,5 +298,99 @@ describe('Config', () => {
       expect(webhooks).toHaveLength(1)
       expect(() => createWebhookRegistrations(webhooks, {})).toThrow('CommitHandler webhook is missing required :gitDir')
     })
+
+    it('should parse maxDepth from WikiIndexer webhook', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :wikiWebhook a :WebHook;
+          :topic <https://pod.example.com/wiki/>;
+          :handler <https://example.com/handlers#WikiIndexer>;
+          :indexUrl <https://pod.example.com/wiki/index.ttl>;
+          :maxDepth 2 .
+      `
+
+      const { parseWebhooksFromRDF } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+
+      expect(webhooks).toHaveLength(1)
+      expect(webhooks[0].handler).toBe('WikiIndexer')
+      expect(webhooks[0].maxDepth).toBe(2)
+    })
+
+    it('should default WikiIndexer maxDepth to 1 when omitted', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :wikiWebhook a :WebHook;
+          :topic <https://pod.example.com/wiki/>;
+          :handler <https://example.com/handlers#WikiIndexer>;
+          :indexUrl <https://pod.example.com/wiki/index.ttl> .
+      `
+
+      const { parseWebhooksFromRDF, createWebhookRegistrations } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+      const registrations = createWebhookRegistrations(webhooks, {})
+
+      expect(registrations).toHaveLength(1)
+      expect(registrations[0].handler).toBe('WikiIndexer')
+      expect((registrations[0] as any).maxDepth).toBe(1)
+    })
+
+    it('should throw when WikiIndexer maxDepth is negative', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :wikiWebhook a :WebHook;
+          :topic <https://pod.example.com/wiki/>;
+          :handler <https://example.com/handlers#WikiIndexer>;
+          :indexUrl <https://pod.example.com/wiki/index.ttl>;
+          :maxDepth -1 .
+      `
+
+      const { parseWebhooksFromRDF, createWebhookRegistrations } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+
+      expect(() => createWebhookRegistrations(webhooks, {})).toThrow('WikiIndexer :maxDepth must be a non-negative integer')
+    })
+
+    it('should throw when WikiIndexer maxDepth is not an integer', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :wikiWebhook a :WebHook;
+          :topic <https://pod.example.com/wiki/>;
+          :handler <https://example.com/handlers#WikiIndexer>;
+          :indexUrl <https://pod.example.com/wiki/index.ttl>;
+          :maxDepth 1.5 .
+      `
+
+      const { parseWebhooksFromRDF, createWebhookRegistrations } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+
+      expect(() => createWebhookRegistrations(webhooks, {})).toThrow('WikiIndexer :maxDepth must be a non-negative integer')
+    })
+
+    it('should throw when WikiIndexer maxDepth is not a number', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :wikiWebhook a :WebHook;
+          :topic <https://pod.example.com/wiki/>;
+          :handler <https://example.com/handlers#WikiIndexer>;
+          :indexUrl <https://pod.example.com/wiki/index.ttl>;
+          :maxDepth "two" .
+      `
+
+      const { parseWebhooksFromRDF, createWebhookRegistrations } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+
+      expect(() => createWebhookRegistrations(webhooks, {})).toThrow('WikiIndexer :maxDepth must be a non-negative integer')
+    })
   })
 })

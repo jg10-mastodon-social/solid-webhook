@@ -142,6 +142,7 @@ export async function main(): Promise<void> {
             await handlers.WikiIndexer(event, fetch, app.context)
           },
           indexUrl: w.indexUrl,
+          maxDepth: w.maxDepth ?? 1,
           actor: w.actor,
         })
       } else {

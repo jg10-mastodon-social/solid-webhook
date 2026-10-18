@@ -33,6 +33,7 @@ export interface WikiIndexerWebhook {
   topic: string
   callback: WebhookHandler
   indexUrl: string
+  maxDepth: number
   actor?: string
 }
 
