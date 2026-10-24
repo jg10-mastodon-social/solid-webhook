@@ -2,31 +2,13 @@ import { Parser, Store } from 'n3'
 import { discoverWikiContainers } from '../services/wikiContainers.js'
 import { subscribeTracked } from '../services/subscriptions.js'
 import { unsubscribeWebhookChannel } from '../services/webhookChannel.js'
+import { basenameToTitle, filenameToTitle } from '../services/wikiLabels.js'
 import type { WebhookEvent, SolidFetch, HandlerContext, WikiIndexerWebhook } from '../types/index.js'
+
+export { basenameToTitle, filenameToTitle } from '../services/wikiLabels.js'
 
 const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label'
 const BATCH_SIZE = 50
-
-function decodePercentEncoding(value: string): string {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
-export function basenameToTitle(filename: string): string {
-  const name = filename.endsWith('.md') ? filename.slice(0, -3) : filename
-  return decodePercentEncoding(name)
-    .split(/[-_\s]+/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-}
-
-function filenameToTitle(fileUrl: string): string {
-  const urlParts = fileUrl.split('/')
-  return basenameToTitle(urlParts[urlParts.length - 1] || '')
-}
 
 function buildBatchUpdate(operation: 'INSERT' | 'DELETE', files: string[]): string {
   const triples = files

@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "reindex-wiki": "npm run build && node dist/src/scripts/reindexWiki.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -84,6 +84,21 @@ containers at startup and subscribes to new ones as they are added.
 only, `1` (the default) includes immediate subfolders, and higher values add
 more levels. See `docs/webhooks.ttl.example` for a configuration example.
 
+### Offline reindex
+
+`reindex-wiki` rebuilds `label-index.ttl` from local files instead of webhook
+events. It never uses the network: pass either a pod URL or a local path plus
+its pod URL.
+
+```bash
+npm run reindex-wiki -- --wiki https://pod.example.com/pod/notes/wiki/ --check
+npm run reindex-wiki -- --wiki /path/to/notes/wiki \
+  --pod-url https://pod.example.com/pod/notes/wiki/ --write --json
+```
+
+The default is a dry run. `--check` exits `1` when the index has drifted;
+`--write` updates it atomically. Run with `--help` for all options.
+
 ## Identity Endpoints
 
 The server uses solidIdentity from @soid/koa to provide identity routes. Custom endpoints:
