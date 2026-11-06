@@ -155,12 +155,10 @@ export async function handleRouteInbox(
     }
 
     await writeResult(fetch, resultUrl, {
+      ...outcome.payload,
       requestId: request.requestId,
       url: request.url,
       status: 'done',
-      contract: ROUTER_CONTRACT,
-      index: outcome.payload.index ?? null,
-      candidates: outcome.payload.candidates ?? [],
       routedAt: new Date().toISOString(),
     })
     await markInboxItem(fetch, event.object, request, 'done')
@@ -368,8 +366,7 @@ interface RouterSuccess {
   ok: true
   payload: {
     contract?: number
-    index?: unknown
-    candidates?: unknown
+    [key: string]: unknown
   }
 }
 
@@ -418,6 +415,11 @@ function runRouter(bin: string, request: RouteRequest): Promise<RouterSuccess | 
   })
 }
 
+/**
+ * Envelope fields the client depends on. Everything else in a success result is
+ * the router's own `route --json` payload, passed through untouched so the
+ * agent reads exactly what the CLI prints.
+ */
 interface ResultPayload {
   requestId: string
   url: string | null
@@ -425,9 +427,8 @@ interface ResultPayload {
   reason?: FailureReason
   message?: string
   contract?: number | null
-  index?: unknown
-  candidates?: unknown
   routedAt: string
+  [key: string]: unknown
 }
 
 async function writeResult(fetch: SolidFetch, resultUrl: string, payload: ResultPayload): Promise<void> {

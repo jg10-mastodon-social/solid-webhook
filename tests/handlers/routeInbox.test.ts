@@ -31,9 +31,38 @@ const ROUTER_OUTPUT = {
   contract: 1,
   index: { version: 5, pages: 534, generated: '2026-11-04T20:55:38+00:00' },
   url: VALID_REQUEST.url,
-  final_url: VALID_REQUEST.url,
+  final_url: 'https://example.com/article?utm_source=feed',
+  fetched: {
+    ok: true,
+    title: 'An Article',
+    description: 'A description',
+    source: '',
+    creator: '',
+    date: '',
+    isbn: '',
+    canonical: '',
+    title_noisy: false,
+    error: '',
+  },
+  reliability: 'high',
   candidates: [
-    { id: 'regionaldatabureau/topics/solar.md', score: 12.5, wiki: 'regionaldatabureau' },
+    {
+      id: 'regionaldatabureau/topics/solar.md',
+      wiki: 'regionaldatabureau',
+      label: 'Solar',
+      subject: 'https://pod.example.com/pod/notes/regionaldatabureau/topics/solar.md',
+      local: '/srv/notes/regionaldatabureau/topics/solar.md',
+      score: 1.0873,
+      cosine: 0.7,
+      boosts: { label_most: 0.15 },
+      matched: ['solar power', 'canal solar'],
+      already_linked: true,
+      heading_match: false,
+      suggested_section: null,
+      headings: ['Unsorted'],
+      summary: 'infrastructure energy usage energy sources Powertracer',
+      enriched: false,
+    },
   ],
 }
 
@@ -169,6 +198,21 @@ describe('RouteInbox', () => {
     expect(outbox.candidates).toEqual(ROUTER_OUTPUT.candidates)
     expect(outbox.index).toEqual(ROUTER_OUTPUT.index)
     expect(String(outbox.routedAt)).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+
+  it('passes the router payload through unchanged', async () => {
+    const { handleRouteInbox } = await import('../../src/handlers/routeInbox.js')
+    const { fetch, calls } = createPod()
+
+    await handleRouteInbox(event(), fetch, context)
+
+    const outbox = written(calls, RESULT)
+    for (const [key, value] of Object.entries(ROUTER_OUTPUT)) {
+      expect(outbox[key]).toEqual(value)
+    }
+    expect(outbox.reliability).toBe('high')
+    expect((outbox.fetched as Record<string, unknown>).title_noisy).toBe(false)
+    expect((outbox.candidates as Record<string, unknown>[])[0].already_linked).toBe(true)
   })
 
   it('marks the inbox item done', async () => {

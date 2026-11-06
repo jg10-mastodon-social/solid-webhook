@@ -129,8 +129,11 @@ and non-http(s) URLs are refused. Before anything is fetched, the target host is
 resolved and rejected if it names or resolves to a loopback, private,
 link-local, or otherwise non-public address. At most one route runs at a time.
 
-The result carries `status` plus, on success, the router's candidates and the
-router's contract and index versions; on failure, a `reason`:
+The result carries `status` plus the router's payload. On success that payload is
+the router's own `route --json` output, passed through untouched — `reliability`,
+`fetched`, `candidates` and all — so a caller reads exactly what the CLI prints,
+with `requestId`, `url`, `status` and `routedAt` added as an envelope. On failure
+the result carries a `reason`:
 
 | `status` | `reason` |
 |---|---|
