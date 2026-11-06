@@ -392,5 +392,24 @@ describe('Config', () => {
 
       expect(() => createWebhookRegistrations(webhooks, {})).toThrow('WikiIndexer :maxDepth must be a non-negative integer')
     })
+
+    it('should build a RouteInbox registration from handler and topic only', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :routeWebhook a :WebHook;
+          :topic <https://pod.example.com/private/wiki-router/inbox/>;
+          :handler <https://example.com/handlers#RouteInbox> .
+      `
+
+      const { parseWebhooksFromRDF, createWebhookRegistrations } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+      const registrations = createWebhookRegistrations(webhooks, {})
+
+      expect(registrations).toHaveLength(1)
+      expect(registrations[0].handler).toBe('RouteInbox')
+      expect(registrations[0].topic).toBe('https://pod.example.com/private/wiki-router/inbox/')
+    })
   })
 })

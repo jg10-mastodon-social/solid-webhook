@@ -183,6 +183,14 @@ export function createWebhookRegistrations(
         actor: pw.actor,
       }
     }
+    if (pw.handler === 'RouteInbox') {
+      return {
+        handler: 'RouteInbox' as const,
+        topic: pw.topic,
+        callback: handlers[pw.handler] || (() => { throw new Error(`Unknown handler: ${pw.handler}`) }),
+        actor: pw.actor,
+      }
+    }
     throw new Error(`Unknown handler: ${pw.handler}`)
   })
 }

@@ -24,6 +24,10 @@ const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, 
     const { handleWikiIndexer } = await import('./handlers/wikiIndexer.js')
     await handleWikiIndexer(event, fetch, ctx)
   },
+  RouteInbox: async (event, fetch, ctx) => {
+    const { handleRouteInbox } = await import('./handlers/routeInbox.js')
+    await handleRouteInbox(event, fetch, ctx)
+  },
 }
 
 export async function main(): Promise<void> {

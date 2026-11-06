@@ -47,6 +47,11 @@ cp .env.example .env
 - `WHITELISTED_ISSUERS` - Comma-separated list of allowed OIDC issuers
 - `HANDLER_BASE_URL` - Namespace prefix for handler types (must end with #)
 
+**Optional:**
+- `WIKI_ROUTER_BIN` - Path to the router CLI used by `RouteInbox`. No default;
+  the handler stays disabled when unset. Relative paths resolve from the working
+  directory.
+
 ### Webhook Registration (RDF)
 
 See `docs/webhooks.ttl.example` for the RDF schema format. Store your webhook configuration on a Solid pod and load it at runtime.
@@ -98,6 +103,47 @@ npm run reindex-wiki -- --wiki /path/to/notes/wiki \
 
 The default is a dry run. `--check` exits `1` when the index has drifted;
 `--write` updates it atomically. Run with `--help` for all options.
+
+## Route Inbox
+
+`RouteInbox` lets a client ask this server where a URL belongs without running
+the scoring logic itself. It is the async half of a two-part arrangement: the
+router CLI (a separate checkout, configured with `WIKI_ROUTER_BIN`) owns the
+index and the scoring; this handler owns the request lifecycle.
+
+The `:topic` must be an **inbox container ending in `/inbox/`**. Requests are
+JSON documents created in that container; results are written to the sibling
+`outbox/` container under the same name. A request is one object:
+
+```json
+{
+  "requestId": "req-a1b2c3d4",
+  "url": "https://example.com/article",
+  "requestedAt": "2026-11-07T00:00:00.000Z",
+  "context": "optional extra context"
+}
+```
+
+The `requestId` must match the resource name. Unknown fields, bodies over 8 KiB,
+and non-http(s) URLs are refused. Before anything is fetched, the target host is
+resolved and rejected if it names or resolves to a loopback, private,
+link-local, or otherwise non-public address. At most one route runs at a time.
+
+The result carries `status` plus, on success, the router's candidates and the
+router's contract and index versions; on failure, a `reason`:
+
+| `status` | `reason` |
+|---|---|
+| `done` | — |
+| `error` | `invalid_request`, `url_rejected`, `router_not_configured`, `router_busy`, `router_failed`, `router_timeout`, `router_contract_mismatch` |
+
+A request whose outbox item already holds a terminal result is ignored, so
+duplicate notifications are harmless. The handler never writes outside the two
+containers and never edits index or wiki content.
+
+The router's JSON `contract` must equal the `ROUTER_CONTRACT` constant in
+`src/handlers/routeInbox.ts`; a mismatch fails the request rather than
+mis-reading the payload. See `docs/webhooks.ttl.example` for a registration.
 
 ## Identity Endpoints
 

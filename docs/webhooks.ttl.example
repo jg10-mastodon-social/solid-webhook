@@ -2,14 +2,14 @@
 
 # Subscribe to inbox for modifications
 :webhook1 a :WebHook;
-  :topic <https://jg10.solidcommunity.net/inbox/>;
+  :topic <https://pod.example.com/inbox/>;
   :handler :InboxModified .
 
 # Subscribe to outbox for new activities
 :webhook2 a :WebHook;
-  :topic <https://jg10.solidcommunity.net/outbox/>;
+  :topic <https://pod.example.com/outbox/>;
   :handler :OutboxModified;
-  :actor <https://jg10.solidcommunity.net/actor/#me> .
+  :actor <https://pod.example.com/actor/#me> .
 
 # Commit changes to a git repository when COMMIT_EDITMSG changes
 :commitWebhook a :WebHook;
@@ -27,3 +27,9 @@
   :handler :WikiIndexer;
   :indexUrl <https://pod.example.com/notes/wiki/index.ttl>;
   :maxDepth 1 .
+
+# Rank wiki pages for a URL submitted to an inbox container.
+# The topic must end in /inbox/; results are written to the sibling /outbox/.
+:routeInbox a :WebHook;
+  :topic <https://pod.example.com/private/wiki-router/inbox/>;
+  :handler :RouteInbox .

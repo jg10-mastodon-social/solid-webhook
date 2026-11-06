@@ -37,12 +37,20 @@ export interface WikiIndexerWebhook {
   actor?: string
 }
 
+export interface RouteInboxWebhook {
+  handler: 'RouteInbox'
+  topic: string
+  callback: WebhookHandler
+  actor?: string
+}
+
 export type WebhookRegistration =
   | InboxModifiedWebhook
   | CommitHandlerWebhook
   | UpdateWebhooksWebhook
   | ItemListIndexerWebhook
   | WikiIndexerWebhook
+  | RouteInboxWebhook
 
 export interface SubscriptionInfo {
   id: string
