@@ -5,6 +5,14 @@ export const WR = 'https://pod.josephguillaume.id.au/ns/wiki-router#'
 
 const XSD_DATE_TIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
+const SOLID_INSERTS = 'http://www.w3.org/ns/solid/terms#inserts'
+const LITERAL_ESCAPES: Record<string, string> = {
+  '\\': '\\\\',
+  '"': '\\"',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+}
 const REQUEST_ID_PATTERN = /^req-[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/
 const ISO_INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
 const MAX_URL_LENGTH = 2048
@@ -23,6 +31,21 @@ export interface InvalidEntry {
   subject: string
   reason: string
   message: string
+}
+
+export interface ResultInput {
+  status: 'done' | 'error'
+  routedAt: string
+  reliability?: 'ok' | 'low'
+  top?: string
+  payload?: string
+  reason?: string
+  message?: string
+}
+
+interface ResultTriple {
+  predicate: string
+  object: string
 }
 
 export interface DocumentScan {
@@ -327,4 +350,99 @@ export function selectPending(body: string, documentUrl: string): DocumentScan {
     pending: candidates.map(candidate => candidate.request),
     invalid: invalidEntries,
   }
+}
+
+function assertHttpIri(value: string, label: string): URL {
+  let parsed: URL
+
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error(`${label} must be an absolute http(s) IRI`)
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`${label} must be an absolute http(s) IRI`)
+  }
+
+  return parsed
+}
+
+function assertResultSubject(subject: string): string {
+  const parsed = assertHttpIri(subject, 'result subject')
+
+  if (parsed.hash.length <= 1) {
+    throw new Error('result subject must be an absolute http(s) IRI with a fragment')
+  }
+
+  return subject
+}
+
+function escapeLiteral(value: string): string {
+  let escaped = ''
+
+  for (const character of value) {
+    const replacement = LITERAL_ESCAPES[character]
+
+    if (replacement !== undefined) {
+      escaped += replacement
+      continue
+    }
+
+    const code = character.codePointAt(0) ?? 0
+    escaped += code < 0x20
+      ? `\\u${code.toString(16).padStart(4, '0')}`
+      : character
+  }
+
+  return escaped
+}
+
+function resultTriples(result: ResultInput): ResultTriple[] {
+  const triples: ResultTriple[] = [
+    { predicate: `${WR}status`, object: `"${escapeLiteral(result.status)}"` },
+    {
+      predicate: `${WR}routedAt`,
+      object: `"${escapeLiteral(result.routedAt)}"^^<${XSD_DATE_TIME}>`,
+    },
+  ]
+
+  if (result.reliability !== undefined) {
+    triples.push({
+      predicate: `${WR}reliability`,
+      object: `"${escapeLiteral(result.reliability)}"`,
+    })
+  }
+
+  if (result.top !== undefined) {
+    triples.push({ predicate: `${WR}top`, object: `<${result.top}>` })
+  }
+
+  for (const [predicate, value] of [
+    ['payload', result.payload],
+    ['reason', result.reason],
+    ['message', result.message],
+  ] as const) {
+    if (value !== undefined) {
+      triples.push({ predicate: `${WR}${predicate}`, object: `"${escapeLiteral(value)}"` })
+    }
+  }
+
+  return triples
+}
+
+export function resultPatch(subject: string, result: ResultInput): string {
+  const subjectIri = assertResultSubject(subject)
+
+  if (result.top !== undefined) {
+    assertHttpIri(result.top, 'top')
+  }
+
+  const triples = resultTriples(result)
+  const body = triples
+    .map((triple, index) =>
+      `${index === 0 ? `  <${subjectIri}> ` : '    '}<${triple.predicate}> ${triple.object}`)
+    .join(' ;\n')
+
+  return `_:p <${SOLID_INSERTS}> {\n${body} .\n} .\n`
 }
