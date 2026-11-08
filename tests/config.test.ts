@@ -393,6 +393,67 @@ describe('Config', () => {
       expect(() => createWebhookRegistrations(webhooks, {})).toThrow('WikiIndexer :maxDepth must be a non-negative integer')
     })
 
+    it('should resolve a relative :topic against the webhook config document', async () => {
+      const handlerBaseUrl = 'https://pod.example.com/pod/settings/webhooks.ttl#'
+      const baseIri = 'https://pod.example.com/pod/settings/webhooks.ttl'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :routeWebhook a :WebHook;
+          :topic <../notes/wiki-router.ttl>;
+          :handler <#RouteInbox> .
+      `
+
+      const { parseWebhooksFromRDF } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl, baseIri)
+
+      expect(webhooks).toHaveLength(1)
+      expect(webhooks[0].topic).toBe('https://pod.example.com/pod/notes/wiki-router.ttl')
+      expect(webhooks[0].handler).toBe('RouteInbox')
+    })
+
+    it('should read a fragment handler and subject when a base IRI is given', async () => {
+      const handlerBaseUrl = 'https://pod.example.com/pod/settings/webhooks.ttl#'
+      const baseIri = 'https://pod.example.com/pod/settings/webhooks.ttl'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        <#routeWebhook> a :WebHook;
+          :topic <https://pod.example.com/pod/notes/wiki-router.ttl>;
+          :handler <#RouteInbox> .
+      `
+
+      const { parseWebhooksFromRDF } = await import('../src/config.js')
+      const webhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl, baseIri)
+
+      expect(webhooks).toHaveLength(1)
+      expect(webhooks[0].handler).toBe('RouteInbox')
+      expect(webhooks[0].topic).toBe('https://pod.example.com/pod/notes/wiki-router.ttl')
+    })
+
+    it('should leave absolute IRIs untouched when a base IRI is given', async () => {
+      const handlerBaseUrl = 'https://example.com/handlers#'
+      const rdfContent = `
+        @prefix : <${handlerBaseUrl}> .
+
+        :webhook1 a :WebHook;
+          :topic <https://example.com/inbox/>;
+          :handler <https://example.com/handlers#InboxModified> .
+      `
+
+      const { parseWebhooksFromRDF } = await import('../src/config.js')
+      const withoutBase = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+      const withBase = await parseWebhooksFromRDF(
+        rdfContent,
+        handlerBaseUrl,
+        'https://pod.example.com/pod/settings/webhooks.ttl'
+      )
+
+      expect(withBase).toEqual(withoutBase)
+      expect(withBase[0].topic).toBe('https://example.com/inbox/')
+      expect(withBase[0].handler).toBe('InboxModified')
+    })
+
     it('should build a RouteInbox registration from handler and topic only', async () => {
       const handlerBaseUrl = 'https://example.com/handlers#'
       const rdfContent = `

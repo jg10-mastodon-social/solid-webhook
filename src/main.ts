@@ -5,6 +5,7 @@ import { handleUpdateWebhooks } from './handlers/updateWebhooks.js'
 import { createApp, startServer, subscribeAll, unsubscribeAll, startRenewalJob } from './index.js'
 import { processExistingInboxItems } from './services/processInbox.js'
 import { initializeWikiIndexers } from './services/wikiIndexerInit.js'
+import { ensureQueueDocument } from './handlers/routeInbox.js'
 import type { SolidFetch, WebhookRegistration, UpdateWebhooksWebhook } from './types/index.js'
 
 const handlers: Record<string, (event: import('./types/index.js').WebhookEvent, fetch: SolidFetch, context: any) => void | Promise<void>> = {
@@ -58,7 +59,7 @@ export async function main(): Promise<void> {
       if (rdfResponse.ok) {
         const rdfContent = await rdfResponse.text()
         console.log(`Loaded ${rdfContent.length} bytes of RDF configuration`)
-        webhooks = await parseWebhooksFromRDF(rdfContent, config.handlerBaseUrl)
+        webhooks = await parseWebhooksFromRDF(rdfContent, config.handlerBaseUrl, config.webhookConfigUrl)
         console.log(`Found ${webhooks.length} webhook registrations`)
       } else {
         console.error(`Failed to fetch webhook config: ${rdfResponse.status} ${rdfResponse.statusText}`)
@@ -136,6 +137,15 @@ export async function main(): Promise<void> {
           indexUrl: w.indexUrl,
           actor: w.actor,
         })
+      } else if (w.handler === 'RouteInbox') {
+        validRegistrations.push({
+          handler: 'RouteInbox' as const,
+          topic: w.topic,
+          callback: async (event, fetch) => {
+            await handlers.RouteInbox(event, fetch, app.context)
+          },
+          actor: w.actor,
+        })
       } else if (w.handler === 'WikiIndexer') {
         if (!w.indexUrl) {
           throw new Error("WikiIndexer webhook is missing required :indexUrl")
@@ -181,6 +191,15 @@ export async function main(): Promise<void> {
   app.context.sendToUrl = config.sendToUrl
   app.context.handlerBaseUrl = config.handlerBaseUrl
   app.context.inboxPageSize = config.inboxPageSize
+
+  console.log('Preparing RouteInbox queue documents...')
+  for (const webhook of webhooks) {
+    if (webhook.handler !== 'RouteInbox') {
+      continue
+    }
+    const ready = await ensureQueueDocument(webhook.topic, fetchFn)
+    console.log(`RouteInbox queue ${webhook.topic}: ${ready ? 'ready' : 'unavailable'}`)
+  }
 
   console.log('Subscribing to webhook channels...')
   const subscriptions = await subscribeAll(validRegistrations, fetchFn, config.sendToUrl)

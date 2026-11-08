@@ -5,6 +5,7 @@ import type { HandlerContext, SolidFetch, WebhookEvent } from '../../src/types/i
 import { WR } from '../../src/handlers/wikiRouterDoc.js'
 import {
   MAX_DOCUMENT_BYTES,
+  ensureQueueDocument,
   handleRouteInbox,
   resetRouteInboxState,
 } from '../../src/handlers/routeInbox.js'
@@ -105,6 +106,7 @@ interface PodOptions {
   document?: string
   documentStatus?: number
   patchStatus?: number
+  putStatus?: number
   /**
    * Accept PATCHes with a 2xx but leave the document unchanged, so the handler's
    * re-read still sees the request pending. Real pods can do this: an accepted
@@ -198,6 +200,16 @@ function createPod(options: PodOptions = {}): {
       }
       documentBody = applyPatch(documentBody, body)
       return response('', 205)
+    }
+
+    if (method === 'PUT') {
+      if (options.putStatus !== undefined) {
+        return response('', options.putStatus)
+      }
+      if (body !== undefined) {
+        documentBody = body
+      }
+      return response('', 201)
     }
 
     return response('method not allowed', 405)
@@ -600,3 +612,62 @@ describe('RouteInbox', () => {
     expect(patches(firstPod.calls)).toHaveLength(1)
   })
 })
+
+const QUEUE_BODY =
+  `@prefix wr: <${WR}> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n`
+
+describe('ensureQueueDocument', () => {
+  it('reports an existing queue document and writes nothing', async () => {
+    const pod = createPod()
+
+    const ready = await ensureQueueDocument(DOC, pod.fetch)
+
+    expect(ready).toBe(true)
+    expect(pod.calls.map(call => call.method)).toEqual(['GET'])
+    expect(getCalls(pod.calls)[0].url).toBe(DOC)
+    expect(getCalls(pod.calls)[0].headers.accept).toBe('text/turtle')
+  })
+
+  it('creates a missing queue document with the namespace prefixes', async () => {
+    const pod = createPod({ documentStatus: 404 })
+
+    const ready = await ensureQueueDocument(DOC, pod.fetch)
+
+    expect(ready).toBe(true)
+    const puts = pod.calls.filter(call => call.method === 'PUT')
+    expect(puts).toHaveLength(1)
+    expect(puts[0].url).toBe(DOC)
+    expect(puts[0].headers['content-type']).toBe('text/turtle')
+    expect(puts[0].body).toBe(QUEUE_BODY)
+  })
+
+  it('reports failure when the create is refused', async () => {
+    const pod = createPod({ documentStatus: 404, putStatus: 500 })
+
+    const ready = await ensureQueueDocument(DOC, pod.fetch)
+
+    expect(ready).toBe(false)
+    expect(pod.calls.filter(call => call.method === 'PUT')).toHaveLength(1)
+  })
+
+  it('reports failure without writing when the read is forbidden', async () => {
+    const pod = createPod({ documentStatus: 403 })
+
+    const ready = await ensureQueueDocument(DOC, pod.fetch)
+
+    expect(ready).toBe(false)
+    expect(pod.calls.filter(call => call.method === 'PUT')).toHaveLength(0)
+  })
+
+  it('reports failure without writing when the read throws', async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('network down')
+    })
+
+    const ready = await ensureQueueDocument(DOC, fetchImpl as unknown as SolidFetch)
+
+    expect(ready).toBe(false)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+})
+

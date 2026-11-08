@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import type { WebhookEvent, SolidFetch, HandlerContext, RouteInboxWebhook } from '../types/index.js'
-import { resultPatch, selectPending } from './wikiRouterDoc.js'
+import { resultPatch, selectPending, WR } from './wikiRouterDoc.js'
 import type { DocumentScan, InvalidEntry, PendingRequest, ResultInput } from './wikiRouterDoc.js'
 
 /**
@@ -13,6 +13,63 @@ export const ROUTER_CONTRACT = 1
 
 /** Largest document this handler will parse. Refuse anything bigger. */
 export const MAX_DOCUMENT_BYTES = 1_048_576
+
+/**
+ * Prefix declarations of an empty queue document. The service creates its own
+ * document because no external client can: the DPoP identity it writes with is
+ * only valid while this process is serving its JWKS.
+ */
+export const QUEUE_DOCUMENT_BODY =
+  `@prefix wr: <${WR}> .\n` +
+  '@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n'
+
+/**
+ * Makes sure the queue document exists before the handler is subscribed to it.
+ * Returns true when the document is already readable or was just created.
+ */
+export async function ensureQueueDocument(
+  documentUrl: string,
+  fetch: SolidFetch
+): Promise<boolean> {
+  let status: number
+  let ok: boolean
+
+  try {
+    const response = await fetch(documentUrl, { headers: { accept: 'text/turtle' } })
+    status = response.status
+    ok = response.ok
+  } catch (error) {
+    console.error(`[RouteInbox] Error: cannot read ${documentUrl}: ${messageOf(error)}`)
+    return false
+  }
+
+  if (ok) {
+    return true
+  }
+
+  if (status !== 404) {
+    console.error(`[RouteInbox] Error: cannot read ${documentUrl}: ${status}`)
+    return false
+  }
+
+  try {
+    const response = await fetch(documentUrl, {
+      method: 'PUT',
+      headers: { 'content-type': 'text/turtle' },
+      body: QUEUE_DOCUMENT_BODY,
+    })
+
+    if (!response.ok) {
+      console.error(`[RouteInbox] Error: cannot create ${documentUrl}: ${response.status}`)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error(`[RouteInbox] Error: cannot create ${documentUrl}: ${messageOf(error)}`)
+    return false
+  }
+}
 
 /**
  * At most this many results are written per event; the next event drains the

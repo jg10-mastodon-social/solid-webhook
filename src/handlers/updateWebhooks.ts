@@ -39,7 +39,7 @@ export async function handleUpdateWebhooks(
   }
 
   const rdfContent = await rdfResponse.text()
-  const parsedWebhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl)
+  const parsedWebhooks = await parseWebhooksFromRDF(rdfContent, handlerBaseUrl, event.object)
   console.log(`[UpdateWebhooks] Parsed ${parsedWebhooks.length} webhooks`)
 
   let wikiIndexerAdded = false

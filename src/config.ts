@@ -59,13 +59,14 @@ export function loadConfig(): Config {
 
 export async function parseWebhooksFromRDF(
   rdfContent: string,
-  handlerBaseUrl: string
+  handlerBaseUrl: string,
+  baseIri?: string
 ): Promise<ParsedWebhook[]> {
   if (!rdfContent.trim()) {
     return []
   }
 
-  const parser = new Parser()
+  const parser = baseIri === undefined ? new Parser() : new Parser({ baseIRI: baseIri })
   const store = new Store()
   
   return new Promise((resolve, reject) => {
