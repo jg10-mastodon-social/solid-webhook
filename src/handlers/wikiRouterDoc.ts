@@ -6,6 +6,7 @@ export const WR = 'https://pod.josephguillaume.id.au/ns/wiki-router#'
 const XSD_DATE_TIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
 const SOLID_INSERTS = 'http://www.w3.org/ns/solid/terms#inserts'
+const SOLID_INSERT_DELETE_PATCH = 'http://www.w3.org/ns/solid/terms#InsertDeletePatch'
 const LITERAL_ESCAPES: Record<string, string> = {
   '\\': '\\\\',
   '"': '\\"',
@@ -444,5 +445,5 @@ export function resultPatch(subject: string, result: ResultInput): string {
       `${index === 0 ? `  <${subjectIri}> ` : '    '}<${triple.predicate}> ${triple.object}`)
     .join(' ;\n')
 
-  return `_:p <${SOLID_INSERTS}> {\n${body} .\n} .\n`
+  return `_:p a <${SOLID_INSERT_DELETE_PATCH}> ;\n    <${SOLID_INSERTS}> {\n${body} .\n} .\n`
 }

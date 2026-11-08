@@ -160,7 +160,8 @@ The answer is an N3 Patch insert sent as `text/n3`:
 ```n3
 @prefix wr: <https://pod.josephguillaume.id.au/ns/wiki-router#> .
 
-_:p <http://www.w3.org/ns/solid/terms#inserts> {
+_:p a <http://www.w3.org/ns/solid/terms#InsertDeletePatch> ;
+    <http://www.w3.org/ns/solid/terms#inserts> {
   <#req-a1b2c3d4> wr:status "done" ;
     wr:routedAt "2026-11-07T00:00:03.120Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
     wr:reliability "ok" ;
@@ -168,6 +169,9 @@ _:p <http://www.w3.org/ns/solid/terms#inserts> {
     wr:payload "…the router's route --json stdout, verbatim…" .
 } .
 ```
+
+The `rdf:type solid:InsertDeletePatch` triple is required by the Solid Protocol;
+a server rejects the patch with `422` without it.
 
 Writes are insert-only. Nothing is ever replaced or deleted, so a PATCH cannot
 clobber a concurrent writer: another client adding a request, or the handler

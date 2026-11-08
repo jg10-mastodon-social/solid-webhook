@@ -9,6 +9,7 @@ const TOP = 'https://pod.josephguillaume.id.au/pod/notes/pages/best-page'
 const ROUTED_AT = '2026-11-08T02:50:07.000Z'
 
 const SOLID_INSERTS = 'http://www.w3.org/ns/solid/terms#inserts'
+const SOLID_INSERT_DELETE_PATCH = 'http://www.w3.org/ns/solid/terms#InsertDeletePatch'
 const XSD_DATE_TIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
 
@@ -49,7 +50,8 @@ describe('resultPatch', () => {
     const patch = resultPatch(SUBJECT, done())
 
     expect(patch).toBe(
-      `_:p <${SOLID_INSERTS}> {\n` +
+      `_:p a <${SOLID_INSERT_DELETE_PATCH}> ;\n` +
+      `    <${SOLID_INSERTS}> {\n` +
       `  <${SUBJECT}> <${WR}status> "done" ;\n` +
       `    <${WR}routedAt> "${ROUTED_AT}"^^<${XSD_DATE_TIME}> .\n` +
       `} .\n`
@@ -57,6 +59,17 @@ describe('resultPatch', () => {
 
     expect(insertsQuads(patch)).toHaveLength(2)
     expect(predicates(patch)).toEqual([`${WR}status`, `${WR}routedAt`])
+  })
+
+  it('declares the patch resource as solid:InsertDeletePatch, which the Solid server requires', () => {
+    const quads = parse(resultPatch(SUBJECT, done()))
+    const formula = quads.find(quad => quad.predicate.value === SOLID_INSERTS)
+    const typeQuad = quads.find(quad =>
+      quad.predicate.value === 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' &&
+      quad.object.value === SOLID_INSERT_DELETE_PATCH)
+
+    expect(typeQuad).toBeDefined()
+    expect(typeQuad?.subject.equals(formula!.subject)).toBe(true)
   })
 
   it('emits all five done triples in the fixed order', () => {
@@ -218,6 +231,6 @@ describe('resultPatch', () => {
     expect(outer).toHaveLength(1)
     expect(outer[0].subject.termType).toBe('BlankNode')
     expect(outer[0].object.termType).toBe('BlankNode')
-    expect(patch.startsWith('_:p <')).toBe(true)
+    expect(patch.startsWith('_:p a <')).toBe(true)
   })
 })
