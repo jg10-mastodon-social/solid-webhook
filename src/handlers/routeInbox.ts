@@ -2,6 +2,8 @@ import { execFile } from 'node:child_process'
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import type { WebhookEvent, SolidFetch, HandlerContext, RouteInboxWebhook } from '../types/index.js'
+import { resultPatch, selectPending } from './wikiRouterDoc.js'
+import type { DocumentScan, InvalidEntry, PendingRequest, ResultInput } from './wikiRouterDoc.js'
 
 /**
  * Version of the request/result contract understood by this handler.
@@ -9,27 +11,28 @@ import type { WebhookEvent, SolidFetch, HandlerContext, RouteInboxWebhook } from
  */
 export const ROUTER_CONTRACT = 1
 
-const MAX_REQUEST_BYTES = 8192
-const MAX_URL_LENGTH = 2048
-const MAX_CONTEXT_LENGTH = 500
+/** Largest document this handler will parse. Refuse anything bigger. */
+export const MAX_DOCUMENT_BYTES = 1_048_576
+
+/**
+ * At most this many results are written per event; the next event drains the
+ * rest. Each route loads a 15 MB index and takes seconds, and the delivery that
+ * triggered this run stays open until it returns, so this is deliberately small.
+ */
+const MAX_ROUTING_PER_RUN = 3
+
 const ROUTER_TIMEOUT_MS = 30_000
 const ROUTER_MAX_BUFFER = 4 * 1024 * 1024
-const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/
-const ALLOWED_FIELDS = new Set(['requestId', 'url', 'requestedAt', 'context', 'status'])
 
 type FailureReason =
-  | 'invalid_request'
   | 'url_rejected'
   | 'router_not_configured'
-  | 'router_busy'
   | 'router_failed'
   | 'router_timeout'
   | 'router_contract_mismatch'
 
-interface RouteRequest {
-  requestId: string
+interface RouterRequest {
   url: string
-  requestedAt?: string
   context?: string
 }
 
@@ -44,6 +47,10 @@ export function resetRouteInboxState(): void {
   inFlight = null
 }
 
+/**
+ * The registration topic is one wiki-router RDF document: the event object is
+ * that document, and both requests and results are triples inside it.
+ */
 export async function handleRouteInbox(
   event: WebhookEvent,
   fetch: SolidFetch,
@@ -62,210 +69,314 @@ export async function handleRouteInbox(
     return false
   }
 
-  let outboxBase: string
-  try {
-    outboxBase = outboxFor(registration.topic)
-  } catch (error) {
-    console.error(`[RouteInbox] Error: ${(error as Error).message}`)
+  const documentUrl = registration.topic
+  if (event.object !== documentUrl) {
+    console.error(
+      `[RouteInbox] Error: event object ${event.object} is not the registered document ${documentUrl}`
+    )
     return false
-  }
-
-  const pathId = requestIdFromPath(event.object)
-  if (!pathId) {
-    console.error(`[RouteInbox] Error: cannot derive a request id from ${event.object}`)
-    return false
-  }
-
-  const resultUrl = `${outboxBase}${pathId}.json`
-
-  const parsed = await readRequest(event.object, fetch)
-  if (!parsed.ok) {
-    await writeResult(fetch, resultUrl, {
-      requestId: pathId,
-      url: null,
-      status: 'error',
-      reason: 'invalid_request',
-      message: parsed.message,
-      routedAt: new Date().toISOString(),
-    })
-    return true
-  }
-
-  const request = parsed.request
-  if (request.requestId !== pathId) {
-    await writeResult(fetch, resultUrl, {
-      requestId: pathId,
-      url: request.url,
-      status: 'error',
-      reason: 'invalid_request',
-      message: 'requestId does not match the inbox resource name',
-      routedAt: new Date().toISOString(),
-    })
-    return true
-  }
-
-  if (await hasTerminalResult(resultUrl, fetch)) {
-    console.log(`[RouteInbox] ${request.requestId} already has a result, skipping`)
-    return false
-  }
-
-  const routerBin = process.env.WIKI_ROUTER_BIN
-  if (!routerBin) {
-    console.error('[RouteInbox] Error: WIKI_ROUTER_BIN is not set')
-    await fail(fetch, resultUrl, event.object, request, 'router_not_configured', {
-      message: 'WIKI_ROUTER_BIN is not set on this host',
-    })
-    return true
   }
 
   if (inFlight !== null) {
-    console.log(`[RouteInbox] router busy with ${inFlight}, rejecting ${request.requestId}`)
-    await fail(fetch, resultUrl, event.object, request, 'router_busy', {
-      message: 'another route is in progress; retry shortly',
-    })
-    return true
+    console.log(`[RouteInbox] a run is already in progress for ${inFlight}; skipping ${documentUrl}`)
+    return false
   }
 
-  inFlight = request.requestId
+  inFlight = documentUrl
   try {
-    const target = await checkTarget(request.url)
-    if (!target.ok) {
-      console.log(`[RouteInbox] rejected ${request.url}: ${target.message}`)
-      await fail(fetch, resultUrl, event.object, request, 'url_rejected', { message: target.message })
-      return true
-    }
-
-    const outcome = await runRouter(routerBin, request)
-    if (!outcome.ok) {
-      await fail(fetch, resultUrl, event.object, request, outcome.reason, {
-        message: outcome.message,
-      })
-      return true
-    }
-    if (outcome.payload.contract !== ROUTER_CONTRACT) {
-      const actual = outcome.payload.contract
-      console.error(
-        `[RouteInbox] router contract mismatch: expected ${ROUTER_CONTRACT}, got ${actual}`
-      )
-      await fail(fetch, resultUrl, event.object, request, 'router_contract_mismatch', {
-        contract: typeof actual === 'number' ? actual : null,
-        message: `router speaks contract ${String(actual)}, this handler expects ${ROUTER_CONTRACT}`,
-      })
-      return true
-    }
-
-    await writeResult(fetch, resultUrl, {
-      ...outcome.payload,
-      requestId: request.requestId,
-      url: request.url,
-      status: 'done',
-      routedAt: new Date().toISOString(),
-    })
-    await markInboxItem(fetch, event.object, request, 'done')
-    console.log(`[RouteInbox] completed: true`)
-    return true
+    return await drainDocument(documentUrl, fetch)
   } finally {
     inFlight = null
   }
 }
 
-function findRegistration(event: WebhookEvent, context?: HandlerContext): RouteInboxWebhook | undefined {
-  const topic = normaliseTopic(event.topic)
+function findRegistration(
+  event: WebhookEvent,
+  context?: HandlerContext
+): RouteInboxWebhook | undefined {
   return context?.registrations?.find(
-    (r): r is RouteInboxWebhook => r.handler === 'RouteInbox' && normaliseTopic(r.topic) === topic
+    (r): r is RouteInboxWebhook => r.handler === 'RouteInbox' && r.topic === event.topic
   )
 }
 
-function normaliseTopic(topic: string): string {
-  return topic.endsWith('/') ? topic : `${topic}/`
-}
-
-function outboxFor(inboxTopic: string): string {
-  const topic = normaliseTopic(inboxTopic)
-  if (!topic.endsWith('/inbox/')) {
-    throw new Error(`RouteInbox topic must be an inbox container ending in /inbox/: ${inboxTopic}`)
+/**
+ * Reads the document, reports unusable requests, then routes pending ones until
+ * the document holds none or `MAX_ROUTING_PER_RUN` results have been written.
+ * Every write is re-read, so the scan decides what is still pending.
+ */
+async function drainDocument(documentUrl: string, fetch: SolidFetch): Promise<boolean> {
+  const initial = await readDocument(documentUrl, fetch)
+  if (!initial.ok) {
+    return false
   }
-  return `${topic.slice(0, -'inbox/'.length)}outbox/`
-}
 
-function requestIdFromPath(objectUrl: string): string | null {
-  let path: string
-  try {
-    path = new URL(objectUrl).pathname
-  } catch {
-    return null
+  let wrote = await writeInvalidResults(documentUrl, initial.scan.invalid, fetch)
+  let scan = initial.scan
+
+  for (let attempt = 0; attempt < MAX_ROUTING_PER_RUN; attempt += 1) {
+    const request = scan.pending[0]
+    if (request === undefined) {
+      break
+    }
+
+    const step = await routeRequest(documentUrl, request, fetch)
+    wrote = wrote || step.attempted
+
+    // A failed write leaves the request pending so a later event retries it.
+    if (!step.ok) {
+      break
+    }
+
+    const next = await readDocument(documentUrl, fetch)
+    if (!next.ok) {
+      break
+    }
+
+    // A successful PATCH must make the subject terminal. If it is still pending
+    // the pod did not take the write; stop rather than route the same request
+    // again and add a second result.
+    const nextRequest = next.scan.pending[0]
+    if (nextRequest !== undefined && nextRequest.subject === request.subject) {
+      console.error(
+        `[RouteInbox] Error: ${request.subject} is still pending after a result was written; stopping`
+      )
+      break
+    }
+
+    scan = next.scan
   }
-  const name = decodeURIComponent(path.split('/').pop() ?? '').replace(/\.json$/, '')
-  return REQUEST_ID_PATTERN.test(name) ? name : null
+
+  return wrote
 }
 
-interface RequestReadError {
-  ok: false
-  message: string
-}
-
-async function readRequest(
-  objectUrl: string,
+/**
+ * Requests whose own triples cannot be routed get a terminal error so they are
+ * not reported again. A subject outside this document is only logged: writing
+ * triples about it would edit a document this handler does not own.
+ */
+async function writeInvalidResults(
+  documentUrl: string,
+  invalid: InvalidEntry[],
   fetch: SolidFetch
-): Promise<{ ok: true; request: RouteRequest } | RequestReadError> {
-  const response = await fetch(objectUrl, {
-    headers: { accept: 'application/json' },
-  })
-  if (!response.ok) {
-    return { ok: false, message: `cannot read inbox item: ${response.status}` }
-  }
+): Promise<boolean> {
+  let wrote = false
 
-  const body = await response.text()
-  if (body.length > MAX_REQUEST_BYTES) {
-    return { ok: false, message: `request body exceeds ${MAX_REQUEST_BYTES} bytes` }
-  }
+  for (const entry of invalid) {
+    if (entry.reason === 'not_in_document') {
+      console.log(`[RouteInbox] ignoring ${entry.subject}: ${entry.message}`)
+      continue
+    }
 
-  let value: unknown
-  try {
-    value = JSON.parse(body)
-  } catch {
-    return { ok: false, message: 'request body is not valid JSON' }
-  }
+    const outcome = await patchResult(documentUrl, entry.subject, {
+      status: 'error',
+      routedAt: nowIso(),
+      reason: entry.reason,
+      message: entry.message,
+    }, fetch)
+    wrote = wrote || outcome.attempted
 
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return { ok: false, message: 'request body must be a JSON object' }
-  }
-
-  const record = value as Record<string, unknown>
-  for (const key of Object.keys(record)) {
-    if (!ALLOWED_FIELDS.has(key)) {
-      return { ok: false, message: `unexpected field: ${key}` }
+    if (outcome.ok) {
+      console.log(`[RouteInbox] wrote error ${entry.reason} for ${entry.subject}`)
     }
   }
 
-  const { requestId, url, requestedAt, context } = record
-  if (typeof requestId !== 'string' || !REQUEST_ID_PATTERN.test(requestId)) {
-    return { ok: false, message: 'requestId is missing or malformed' }
-  }
-  if (typeof url !== 'string' || url.length === 0 || url.length > MAX_URL_LENGTH) {
-    return { ok: false, message: 'url is missing or too long' }
-  }
-  if (requestedAt !== undefined && typeof requestedAt !== 'string') {
-    return { ok: false, message: 'requestedAt must be a string' }
-  }
-  if (context !== undefined && (typeof context !== 'string' || context.length > MAX_CONTEXT_LENGTH)) {
-    return { ok: false, message: `context must be a string of at most ${MAX_CONTEXT_LENGTH} characters` }
-  }
-
-  return { ok: true, request: { requestId, url, requestedAt, context } }
+  return wrote
 }
 
-async function hasTerminalResult(resultUrl: string, fetch: SolidFetch): Promise<boolean> {
-  const response = await fetch(resultUrl, { method: 'GET', headers: { accept: 'application/json' } })
-  if (!response.ok) {
-    return false
+interface RouteStep {
+  /** A PATCH left the handler. */
+  attempted: boolean
+  /** The PATCH was accepted, so the request is terminal and the loop may continue. */
+  ok: boolean
+}
+
+async function routeRequest(
+  documentUrl: string,
+  request: PendingRequest,
+  fetch: SolidFetch
+): Promise<RouteStep> {
+  const target = await checkTarget(request.url)
+  if (!target.ok) {
+    console.log(`[RouteInbox] rejected ${request.url}: ${target.message}`)
+    return patchResult(documentUrl, request.subject, {
+      status: 'error',
+      routedAt: nowIso(),
+      reason: 'url_rejected',
+      message: target.message,
+    }, fetch)
   }
+
+  const routerBin = process.env.WIKI_ROUTER_BIN
+  if (!routerBin) {
+    console.error('[RouteInbox] Error: WIKI_ROUTER_BIN is not set')
+    return patchResult(documentUrl, request.subject, {
+      status: 'error',
+      routedAt: nowIso(),
+      reason: 'router_not_configured',
+      message: 'WIKI_ROUTER_BIN is not set on this host',
+    }, fetch)
+  }
+
+  const outcome = await runRouter(routerBin, request)
+  if (!outcome.ok) {
+    return patchResult(documentUrl, request.subject, {
+      status: 'error',
+      routedAt: nowIso(),
+      reason: outcome.reason,
+      message: outcome.message,
+    }, fetch)
+  }
+
+  if (outcome.payload.contract !== ROUTER_CONTRACT) {
+    const actual = outcome.payload.contract
+    console.error(
+      `[RouteInbox] router contract mismatch: expected ${ROUTER_CONTRACT}, got ${String(actual)}`
+    )
+    return patchResult(documentUrl, request.subject, {
+      status: 'error',
+      routedAt: nowIso(),
+      reason: 'router_contract_mismatch',
+      message: `router speaks contract ${String(actual)}, this handler expects ${ROUTER_CONTRACT}`,
+    }, fetch)
+  }
+
+  const result: ResultInput = {
+    status: 'done',
+    routedAt: nowIso(),
+    payload: outcome.stdout,
+  }
+
+  const reliability = reliabilityOf(outcome.payload)
+  if (reliability !== undefined) {
+    result.reliability = reliability
+  }
+
+  const top = topCandidate(outcome.payload)
+  if (top !== undefined) {
+    result.top = top
+  }
+
+  return patchResult(documentUrl, request.subject, result, fetch)
+}
+
+interface DocumentRead {
+  ok: true
+  scan: DocumentScan
+}
+
+type DocumentReadResult = DocumentRead | { ok: false }
+
+async function readDocument(documentUrl: string, fetch: SolidFetch): Promise<DocumentReadResult> {
+  let body: string
+
   try {
-    const existing = JSON.parse(await response.text()) as { status?: string }
-    return existing.status === 'done' || existing.status === 'error'
-  } catch {
-    return false
+    const response = await fetch(documentUrl, { headers: { accept: 'text/turtle' } })
+    if (!response.ok) {
+      console.error(`[RouteInbox] Error: cannot read ${documentUrl}: ${response.status}`)
+      return { ok: false }
+    }
+    body = await response.text()
+  } catch (error) {
+    console.error(`[RouteInbox] Error: cannot read ${documentUrl}: ${messageOf(error)}`)
+    return { ok: false }
   }
+
+  if (Buffer.byteLength(body, 'utf8') > MAX_DOCUMENT_BYTES) {
+    console.error(
+      `[RouteInbox] Error: ${documentUrl} exceeds ${MAX_DOCUMENT_BYTES} bytes; refusing to parse it`
+    )
+    return { ok: false }
+  }
+
+  try {
+    return { ok: true, scan: selectPending(body, documentUrl) }
+  } catch (error) {
+    console.error(`[RouteInbox] Error: ${messageOf(error)}`)
+    return { ok: false }
+  }
+}
+
+interface PatchOutcome {
+  attempted: boolean
+  ok: boolean
+}
+
+async function patchResult(
+  documentUrl: string,
+  subject: string,
+  result: ResultInput,
+  fetch: SolidFetch
+): Promise<PatchOutcome> {
+  let body: string
+
+  try {
+    body = resultPatch(subject, result)
+  } catch (error) {
+    console.error(`[RouteInbox] Error: cannot build a result patch for ${subject}: ${messageOf(error)}`)
+    return { attempted: false, ok: false }
+  }
+
+  try {
+    const response = await fetch(documentUrl, {
+      method: 'PATCH',
+      headers: { 'content-type': 'text/n3', accept: 'text/turtle' },
+      body,
+    })
+    if (!response.ok) {
+      console.error(`[RouteInbox] Error: failed to write a result for ${subject}: ${response.status}`)
+      return { attempted: true, ok: false }
+    }
+    return { attempted: true, ok: true }
+  } catch (error) {
+    console.error(`[RouteInbox] Error: failed to write a result for ${subject}: ${messageOf(error)}`)
+    return { attempted: true, ok: false }
+  }
+}
+
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** Copies the router's reliability only when this handler understands the value. */
+function reliabilityOf(payload: Record<string, unknown>): 'ok' | 'low' | undefined {
+  const value = payload.reliability
+  return value === 'ok' || value === 'low' ? value : undefined
+}
+
+/**
+ * Copies the first candidate subject only when it is an absolute http(s) IRI:
+ * `resultPatch` writes it as a named node and refuses anything else.
+ */
+function topCandidate(payload: Record<string, unknown>): string | undefined {
+  const candidates = payload.candidates
+  if (!Array.isArray(candidates)) {
+    return undefined
+  }
+
+  const first: unknown = candidates[0]
+  if (typeof first !== 'object' || first === null) {
+    return undefined
+  }
+
+  const subject = (first as Record<string, unknown>).subject
+  if (typeof subject !== 'string') {
+    return undefined
+  }
+
+  try {
+    const parsed = new URL(subject)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return undefined
+    }
+  } catch {
+    return undefined
+  }
+
+  return subject
 }
 
 interface TargetRejected {
@@ -364,10 +475,10 @@ export function isBlockedAddress(address: string): boolean {
 
 interface RouterSuccess {
   ok: true
-  payload: {
-    contract?: number
-    [key: string]: unknown
-  }
+  /** The parsed contract envelope, used only to check the contract and pick fields. */
+  payload: Record<string, unknown>
+  /** The router's raw stdout, stored as the payload literal untouched. */
+  stdout: string
 }
 
 interface RouterFailure {
@@ -376,7 +487,7 @@ interface RouterFailure {
   message: string
 }
 
-function runRouter(bin: string, request: RouteRequest): Promise<RouterSuccess | RouterFailure> {
+function runRouter(bin: string, request: RouterRequest): Promise<RouterSuccess | RouterFailure> {
   const args = ['route', request.url, '--json']
   if (request.context) {
     args.push('--context', request.context)
@@ -400,91 +511,30 @@ function runRouter(bin: string, request: RouteRequest): Promise<RouterSuccess | 
           })
           return
         }
+
+        let payload: unknown
         try {
-          const payload = JSON.parse(stdout) as RouterSuccess['payload']
-          resolve({ ok: true, payload })
+          payload = JSON.parse(stdout)
         } catch {
           resolve({
             ok: false,
             reason: 'router_failed',
             message: 'router output was not valid JSON',
           })
+          return
         }
+
+        if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+          resolve({
+            ok: false,
+            reason: 'router_contract_mismatch',
+            message: 'router output must be a JSON object',
+          })
+          return
+        }
+
+        resolve({ ok: true, payload: payload as Record<string, unknown>, stdout })
       }
     )
   })
-}
-
-/**
- * Envelope fields the client depends on. Everything else in a success result is
- * the router's own `route --json` payload, passed through untouched so the
- * agent reads exactly what the CLI prints.
- */
-interface ResultPayload {
-  requestId: string
-  url: string | null
-  status: 'done' | 'error'
-  reason?: FailureReason
-  message?: string
-  contract?: number | null
-  routedAt: string
-  [key: string]: unknown
-}
-
-async function writeResult(fetch: SolidFetch, resultUrl: string, payload: ResultPayload): Promise<void> {
-  const response = await fetch(resultUrl, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    console.error(`[RouteInbox] Error: failed to write result: ${response.status}`)
-    return
-  }
-  console.log(`[RouteInbox] wrote result ${payload.status}${payload.reason ? ` (${payload.reason})` : ''}`)
-}
-
-async function fail(
-  fetch: SolidFetch,
-  resultUrl: string,
-  itemUrl: string,
-  request: RouteRequest,
-  reason: FailureReason,
-  extra: { message?: string; contract?: number | null } = {}
-): Promise<void> {
-  await writeResult(fetch, resultUrl, {
-    requestId: request.requestId,
-    url: request.url,
-    status: 'error',
-    reason,
-    message: extra.message,
-    contract: extra.contract,
-    routedAt: new Date().toISOString(),
-  })
-  await markInboxItem(fetch, itemUrl, request, 'error')
-}
-
-async function markInboxItem(
-  fetch: SolidFetch,
-  itemUrl: string,
-  request: RouteRequest,
-  status: 'done' | 'error'
-): Promise<void> {
-  const body = {
-    ...request,
-    status,
-    routedAt: new Date().toISOString(),
-  }
-  try {
-    const response = await fetch(itemUrl, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!response.ok) {
-      console.error(`[RouteInbox] Error: failed to update inbox item: ${response.status}`)
-    }
-  } catch (error) {
-    console.error(`[RouteInbox] Error: failed to update inbox item: ${(error as Error).message}`)
-  }
 }
