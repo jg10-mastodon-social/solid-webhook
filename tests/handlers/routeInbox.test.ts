@@ -105,6 +105,12 @@ interface PodOptions {
   document?: string
   documentStatus?: number
   patchStatus?: number
+  /**
+   * Accept PATCHes with a 2xx but leave the document unchanged, so the handler's
+   * re-read still sees the request pending. Real pods can do this: an accepted
+   * write is not a visible write.
+   */
+  applyPatches?: boolean
 }
 
 function literalToTurtle(value: string): string {
@@ -186,6 +192,9 @@ function createPod(options: PodOptions = {}): {
       }
       if (body === undefined) {
         return response('no body', 400)
+      }
+      if (options.applyPatches === false) {
+        return response('', 200)
       }
       documentBody = applyPatch(documentBody, body)
       return response('', 205)
@@ -553,6 +562,18 @@ describe('RouteInbox', () => {
     expect(result).toBe(true)
     expect(mockExecFile).toHaveBeenCalledTimes(1)
     expect(patches(pod.calls)).toHaveLength(1)
+    expect(pod.document()).not.toContain('routedAt')
+  })
+
+  it('stops after one route when an accepted patch leaves the request pending', async () => {
+    const pod = createPod({ applyPatches: false })
+
+    const result = await handleRouteInbox(event(), pod.fetch, context())
+
+    expect(result).toBe(true)
+    expect(mockExecFile).toHaveBeenCalledTimes(1)
+    expect(patches(pod.calls)).toHaveLength(1)
+    expect(getCalls(pod.calls)).toHaveLength(2)
     expect(pod.document()).not.toContain('routedAt')
   })
 

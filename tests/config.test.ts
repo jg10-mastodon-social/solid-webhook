@@ -399,7 +399,7 @@ describe('Config', () => {
         @prefix : <${handlerBaseUrl}> .
 
         :routeWebhook a :WebHook;
-          :topic <https://pod.example.com/private/wiki-router/inbox/>;
+          :topic <https://pod.example.com/pod/notes/wiki-router.ttl>;
           :handler <https://example.com/handlers#RouteInbox> .
       `
 
@@ -409,7 +409,7 @@ describe('Config', () => {
 
       expect(registrations).toHaveLength(1)
       expect(registrations[0].handler).toBe('RouteInbox')
-      expect(registrations[0].topic).toBe('https://pod.example.com/private/wiki-router/inbox/')
+      expect(registrations[0].topic).toBe('https://pod.example.com/pod/notes/wiki-router.ttl')
     })
   })
 })

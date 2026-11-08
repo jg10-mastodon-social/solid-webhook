@@ -28,8 +28,9 @@
   :indexUrl <https://pod.example.com/notes/wiki/index.ttl>;
   :maxDepth 1 .
 
-# Rank wiki pages for a URL submitted to an inbox container.
-# The topic must end in /inbox/; results are written to the sibling /outbox/.
+# Rank wiki pages for a URL submitted to the route-inbox document.
+# The topic is one RDF document holding both requests and results; the handler
+# inserts result triples next to the request subject.
 :routeInbox a :WebHook;
-  :topic <https://pod.example.com/private/wiki-router/inbox/>;
+  :topic <https://pod.example.com/pod/notes/wiki-router.ttl>;
   :handler :RouteInbox .

@@ -114,42 +114,103 @@ the scoring logic itself. It is the async half of a two-part arrangement: the
 router CLI (a separate checkout, configured with `WIKI_ROUTER_BIN`) owns the
 index and the scoring; this handler owns the request lifecycle.
 
-The `:topic` must be an **inbox container ending in `/inbox/`**. Requests are
-JSON documents created in that container; results are written to the sibling
-`outbox/` container under the same name. A request is one object:
+The `:topic` is **one RDF document**, not a container. Requests and results both
+live in it: a caller adds request triples, this handler adds result triples to
+the same subject. One document is one queue, and a caller can read the whole
+queue in a single GET.
 
-```json
-{
-  "requestId": "req-a1b2c3d4",
-  "url": "https://example.com/article",
-  "requestedAt": "2026-11-07T00:00:00.000Z",
-  "context": "optional extra context"
-}
+The document uses the `wiki-router` namespace,
+`https://pod.josephguillaume.id.au/ns/wiki-router#` (`wr:` below). A request is a
+subject inside the document, named `<#req-…>`, with a URL and optionally a
+timestamp and some context:
+
+```turtle
+@prefix wr: <https://pod.josephguillaume.id.au/ns/wiki-router#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<#req-a1b2c3d4> wr:url "https://example.com/article" ;
+  wr:requestedAt "2026-11-07T00:00:00.000Z"^^xsd:dateTime ;
+  wr:context "optional extra context" .
 ```
 
-The `requestId` must match the resource name. Unknown fields, bodies over 8 KiB,
-and non-http(s) URLs are refused. Before anything is fetched, the target host is
-resolved and rejected if it names or resolves to a loopback, private,
-link-local, or otherwise non-public address. At most one route runs at a time.
+The fragment must look like `#req-` followed by 8 to 64 characters of
+`[A-Za-z0-9_-]`, the first of them a letter or digit. `wr:url` is required and
+must be a single literal of at most 2048 characters; `wr:requestedAt` must be an
+`xsd:dateTime` or an ISO 8601 instant and decides the order requests are routed
+in; `wr:context` must be a single literal of at most 500 characters.
 
-The result carries `status` plus the router's payload. On success that payload is
-the router's own `route --json` output, passed through untouched — `reliability`,
-`fetched`, `candidates` and all — so a caller reads exactly what the CLI prints,
-with `requestId`, `url`, `status` and `routedAt` added as an envelope. On failure
-the result carries a `reason`:
+**Pending means `wr:url` present and `wr:routedAt` absent.** A caller writes
+only the request, never a status, so there is nothing for the server to replace
+or to disagree about: once `wr:routedAt` is on the subject, it is terminal and
+is never routed again. That also makes duplicate notifications harmless.
 
-| `status` | `reason` |
+The handler answers by inserting result triples on the same subject:
+
+- `wr:status` — `"done"` or `"error"`
+- `wr:routedAt` — the write time, as `xsd:dateTime`; this is what makes the
+  subject terminal
+- `wr:reliability` — `"ok"` or `"low"`, only when the router reports one of those
+- `wr:top` — the first candidate's subject, only when it is an absolute http(s) IRI
+- `wr:payload` — the router's `route --json` stdout, verbatim, with its own
+  newlines and quoting. A caller reads exactly what the CLI printed.
+- on error, `wr:reason` and `wr:message` instead of `wr:reliability`/`wr:top`/`wr:payload`
+
+The answer is an N3 Patch insert sent as `text/n3`:
+
+```n3
+@prefix wr: <https://pod.josephguillaume.id.au/ns/wiki-router#> .
+
+_:p <http://www.w3.org/ns/solid/terms#inserts> {
+  <#req-a1b2c3d4> wr:status "done" ;
+    wr:routedAt "2026-11-07T00:00:03.120Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
+    wr:reliability "ok" ;
+    wr:top <https://pod.example.com/pod/notes/pages/solar> ;
+    wr:payload "…the router's route --json stdout, verbatim…" .
+} .
+```
+
+Writes are insert-only. Nothing is ever replaced or deleted, so a PATCH cannot
+clobber a concurrent writer: another client adding a request, or the handler
+adding a second result, both just add triples. After each accepted PATCH the
+handler re-reads the document and only continues if that subject is no longer
+pending; an accepted write that does not show up stops the run.
+
+At most one route runs at a time — the scoring index is large and each route
+loads it. A run routes at most three requests and stops there; the remaining
+pending requests are left alone and drained by the next notification, which
+finds them by the same rule. Unusable subjects are answered with one error each
+before any routing, so a document full of malformed requests gets all of its
+errors in a single pass. A document over 1 MiB is refused unparsed rather than
+loaded.
+
+Before anything is fetched, the target host is resolved and rejected if it names
+or resolves to a loopback, private, link-local, or otherwise non-public address,
+and anything that is not http(s) is refused. The router's JSON `contract` must
+equal the `ROUTER_CONTRACT` constant in `src/handlers/routeInbox.ts` (1 today); a
+mismatch fails the request rather than mis-reading the payload.
+
+Reasons written on an error:
+
+| `wr:status` | `wr:reason` |
 |---|---|
-| `done` | — |
-| `error` | `invalid_request`, `url_rejected`, `router_not_configured`, `router_busy`, `router_failed`, `router_timeout`, `router_contract_mismatch` |
+| `done` | none |
+| `error`, routing failure | `url_rejected`, `router_not_configured`, `router_failed`, `router_timeout`, `router_contract_mismatch` |
+| `error`, request shape | `request_id_malformed`, `url_too_long`, `url_duplicate`, `url_not_literal`, `url_empty`, `context_too_long`, `requested_at_invalid` |
 
-A request whose outbox item already holds a terminal result is ignored, so
-duplicate notifications are harmless. The handler never writes outside the two
-containers and never edits index or wiki content.
+A request-shape error is written once so the same broken subject is not reported
+again. A subject that is not inside the topic document is only logged
+(`not_in_document`) and never written about, because that would edit a document
+this handler does not own. There is also a defensive `url_missing` entry in the
+parser; it is unreachable, since a subject only becomes a request when it has a
+`wr:url`.
 
-The router's JSON `contract` must equal the `ROUTER_CONTRACT` constant in
-`src/handlers/routeInbox.ts`; a mismatch fails the request rather than
-mis-reading the payload. See `docs/webhooks.ttl.example` for a registration.
+Retention is the consumer's job. The handler never deletes triples: applied
+subjects stay in the document until the consumer removes them, or someone prunes
+the file. Removing a subject and its results is safe at any time — a subject
+without `wr:url` is not pending, and a subject without `wr:routedAt` is simply
+routed again. The handler never edits index or wiki content.
+
+See `docs/webhooks.ttl.example` for a registration.
 
 ## Identity Endpoints
 
