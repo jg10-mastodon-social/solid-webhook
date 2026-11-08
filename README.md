@@ -51,6 +51,9 @@ cp .env.example .env
 - `WIKI_ROUTER_BIN` - Path to the router CLI used by `RouteInbox`. No default;
   the handler stays disabled when unset. Relative paths resolve from the working
   directory.
+- `WIKI_ROUTER_NOTES`, `WIKI_ROUTER_HOME`, `WIKI_ROUTER_POD_BASE` - Read by the
+  router CLI itself, which inherits this process's environment. `NOTES` and
+  `HOME` are required by the CLI; `POD_BASE` is optional.
 
 ### Webhook Registration (RDF)
 
