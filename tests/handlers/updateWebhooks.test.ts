@@ -363,6 +363,57 @@ describe('UpdateWebhooks Handler', () => {
       expect(initializeWikiIndexers).not.toHaveBeenCalled()
     })
 
+    it('should forward gitDir to the CommitHandler callback', async () => {
+      const { handleUpdateWebhooks } = await import('../../src/handlers/updateWebhooks.js')
+
+      const gitDir = '/data/repos/example'
+      mockFetch.mockResolvedValue(new Response('', { status: 200 }))
+      ;(parseWebhooksFromRDF as any).mockResolvedValue([
+        {
+          topic: 'https://pod.example.com/repo/',
+          handler: 'CommitHandler',
+          gitDir,
+        },
+      ])
+
+      mockSubscribeWebhookChannel.mockResolvedValue({
+        id: 'https://example.com/sub/repo',
+        receiveFrom: 'https://example.com/receive/repo',
+        topic: 'https://pod.example.com/repo/',
+      })
+
+      const event: WebhookEvent = {
+        type: 'Update',
+        object: 'https://example.com/config.ttl',
+        topic: 'https://example.com/inbox/',
+        raw: { type: 'Update', object: 'https://example.com/config.ttl' },
+      }
+
+      await handleUpdateWebhooks(event, mockFetch, mockContext)
+
+      expect(mockContext.registrations).toHaveLength(1)
+      const callback = mockContext.registrations[0].callback as (
+        event: WebhookEvent,
+        fetch: SolidFetch
+      ) => Promise<void>
+      const callbackEvent: WebhookEvent = {
+        type: 'Add',
+        object: 'https://pod.example.com/repo/note.md',
+        topic: 'https://pod.example.com/.git/COMMIT_EDITMSG',
+        raw: { type: 'Add', object: 'https://pod.example.com/repo/note.md' },
+      }
+      const callbackFetch: SolidFetch = async () => new Response('test: commit', { status: 200 })
+
+      await callback(callbackEvent, callbackFetch)
+
+      expect(mockContext.handlers.CommitHandler).toHaveBeenCalledTimes(1)
+      expect(mockContext.handlers.CommitHandler).toHaveBeenCalledWith(
+        callbackEvent,
+        callbackFetch,
+        expect.objectContaining({ gitDir })
+      )
+    })
+
     it('should fail CommitHandler registration when gitDir is missing', async () => {
       const { handleUpdateWebhooks } = await import('../../src/handlers/updateWebhooks.js')
 

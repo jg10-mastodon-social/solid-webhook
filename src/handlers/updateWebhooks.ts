@@ -9,6 +9,7 @@ interface KoaDefaultContext {
   handlers: Record<string, (event: WebhookEvent, fetch: SolidFetch, context: KoaDefaultContext) => void | Promise<void>>
   sendToUrl: string
   handlerBaseUrl: string
+  gitDir?: string
 }
 
 export async function handleUpdateWebhooks(
@@ -88,10 +89,19 @@ export async function handleUpdateWebhooks(
     try {
       const subscription = await subscribeWebhookChannel(webhook.topic, sendToUrl, fetch)
       subscriptions.push({ ...subscription, status: 'active' })
+      // The registered callback must carry the per-webhook values (gitDir):
+      // `context` is the shared app context, which has no gitDir.
       const registration: Record<string, unknown> = {
         handler: webhook.handler,
         topic: webhook.topic,
-        callback: async (evt: WebhookEvent, fet: SolidFetch) => handler(evt, fet, context),
+        callback: async (evt: WebhookEvent, fet: SolidFetch) =>
+          handler(
+            evt,
+            fet,
+            webhook.handler === 'CommitHandler'
+              ? { ...context, gitDir: webhook.gitDir }
+              : context
+          ),
         actor: webhook.actor,
       }
       if (webhook.handler === 'WikiIndexer') {
