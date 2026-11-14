@@ -99,10 +99,7 @@ describe('CommitHandler', () => {
 
       expect(result).toBe(true)
       expect(mockExec).toHaveBeenCalledTimes(2)
-      expect(mockExec).toHaveBeenCalledWith(
-        'git --git-dir=/repos/myrepo add --all .',
-        expect.any(Object)
-      )
+      expect(mockExec).toHaveBeenCalledWith('git -C "/repos/myrepo" add --all .')
     })
 
     it('should return false when git commit fails', async () => {

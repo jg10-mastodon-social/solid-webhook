@@ -3,8 +3,31 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
+import { tmpdir } from 'os'
 
 const execAsync = promisify(exec)
+
+const NOTHING_TO_COMMIT = /nothing to commit|nothing added to commit/
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
+}
+
+/**
+ * Collect the diagnostic text of a failed git command. `exec` rejects with an
+ * error carrying `stdout`, `stderr` and a message that repeats the command.
+ */
+function gitFailureOutput(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const { stdout, stderr, message } = error as {
+      stdout?: unknown
+      stderr?: unknown
+      message?: unknown
+    }
+    return [stdout, stderr, message].filter(isNonEmptyString).join('\n')
+  }
+  return String(error)
+}
 
 export async function handleCommitHandler(
   event: WebhookEvent,
@@ -36,13 +59,23 @@ export async function handleCommitHandler(
     const commitMsg = await response.text()
     const gitDir = context.gitDir
 
-    const tempFile = join('/tmp', `commit-msg-${Date.now()}.txt`)
+    const tempFile = join(tmpdir(), `commit-msg-${Date.now()}.txt`)
     try {
       await writeFile(tempFile, commitMsg, 'utf-8')
-      await execAsync(`git --git-dir=${gitDir} add --all .`, { cwd: gitDir })
-      await execAsync(`git --git-dir=${gitDir} commit -F "${tempFile}" --cleanup=strip`, { cwd: gitDir })
-      console.log(`[CommitHandler] Committed changes in: ${gitDir}`)
-      commitSuccess = true
+      try {
+        await execAsync(`git -C "${gitDir}" add --all .`)
+        await execAsync(`git -C "${gitDir}" commit -F "${tempFile}" --cleanup=strip`)
+        console.log(`[CommitHandler] Committed changes in: ${gitDir}`)
+        commitSuccess = true
+      } catch (error) {
+        const output = gitFailureOutput(error)
+        if (NOTHING_TO_COMMIT.test(output)) {
+          console.log(`[CommitHandler] Nothing to commit in: ${gitDir}`)
+          commitSuccess = true
+        } else {
+          throw error
+        }
+      }
     } finally {
       try {
         await unlink(tempFile)
