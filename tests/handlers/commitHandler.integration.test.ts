@@ -37,6 +37,19 @@ async function initRepo(): Promise<string> {
   return dir
 }
 
+/**
+ * Make `git add` hold `.git/index.lock` for a while. Git locks the index before
+ * running a clean filter, so an unserialised second `git add` collides with it
+ * rather than slipping past. Without this the two runs on a tiny repo usually
+ * miss each other and the lock race the serialisation prevents does not
+ * reproduce.
+ */
+async function installSlowIndexFilter(dir: string): Promise<void> {
+  await git(dir, ['config', 'filter.slow.clean', 'sleep 0.3; cat'])
+  await git(dir, ['config', 'filter.slow.smudge', 'cat'])
+  await writeFile(join(dir, '.gitattributes'), 'note.md filter=slow\n', 'utf-8')
+}
+
 describe('CommitHandler (real git)', () => {
   it('commits the work tree changes and leaves it clean', async () => {
     const dir = await initRepo()
@@ -48,6 +61,32 @@ describe('CommitHandler (real git)', () => {
 
       expect(result).toBe(true)
       expect(await git(dir, ['log', '-1', '--pretty=%s'])).toBe(message)
+      expect(await git(dir, ['status', '--porcelain'])).toBe('')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('serialises concurrent commits for the same repo', async () => {
+    const dir = await initRepo()
+    try {
+      // Enough content that a second, unserialised `git add` overlaps the first
+      // one's index lock instead of racing past it.
+      const lines = Array.from({ length: 20000 }, (_, i) => `line ${i}`)
+      await writeFile(join(dir, 'note.md'), `${lines.join('\n')}\n`, 'utf-8')
+      await installSlowIndexFilter(dir)
+
+      const [first, second] = await Promise.all([
+        handleCommitHandler(createEvent(), createMockFetch('test: first concurrent commit'), {
+          gitDir: dir,
+        }),
+        handleCommitHandler(createEvent(), createMockFetch('test: second concurrent commit'), {
+          gitDir: dir,
+        }),
+      ])
+
+      expect([first, second]).toEqual([true, true])
+      expect(await git(dir, ['rev-list', '--count', 'HEAD'])).toBe('1')
       expect(await git(dir, ['status', '--porcelain'])).toBe('')
     } finally {
       await rm(dir, { recursive: true, force: true })

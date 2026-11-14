@@ -102,6 +102,31 @@ describe('CommitHandler', () => {
       expect(mockExec).toHaveBeenCalledWith('git -C "/repos/myrepo" add --all .')
     })
 
+    it('should retry git when another process holds the index lock', async () => {
+      const lockError = new Error(
+        "Command failed: git -C \"/repos/myrepo\" add --all .\nfatal: Unable to create '/repos/myrepo/.git/index.lock': File exists."
+      )
+      mockExec.mockRejectedValueOnce(lockError)
+
+      const mockFetch = createMockFetch('Initial commit')
+
+      const result = await handleCommitHandler(
+        {
+          type: 'Add',
+          topic: 'https://pod.example.com/.git/COMMIT_EDITMSG',
+          object: '',
+          raw: {},
+        },
+        mockFetch,
+        { gitDir: '/repos/myrepo' }
+      )
+
+      expect(result).toBe(true)
+      expect(mockExec).toHaveBeenCalledTimes(3)
+      expect(mockExec).toHaveBeenNthCalledWith(1, 'git -C "/repos/myrepo" add --all .')
+      expect(mockExec).toHaveBeenNthCalledWith(2, 'git -C "/repos/myrepo" add --all .')
+    })
+
     it('should return false when git commit fails', async () => {
       mockExec.mockRejectedValueOnce(new Error('Git failed'))
 
